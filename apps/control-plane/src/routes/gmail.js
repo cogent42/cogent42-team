@@ -4,6 +4,7 @@
 import { google } from "googleapis";
 import { pool, audit } from "@cogent42-team/db";
 import { encryptString } from "@cogent42-team/shared/crypto";
+import { isAdminToken } from "../lib/auth.js";
 
 const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 
@@ -21,7 +22,7 @@ export async function gmailRoutes(app) {
     // Auth gate (this route is registered BEFORE admin gate, so re-check token here)
     const header = req.headers.authorization || "";
     const token  = header.startsWith("Bearer ") ? header.slice(7) : "";
-    if (!token || token !== process.env.ADMIN_TOKEN) {
+    if (!isAdminToken(token)) {
       return reply.code(401).send({ error: "unauthorized" });
     }
 

@@ -58,7 +58,6 @@ export async function usersRoutes(app) {
           TELEGRAM_BOT_TOKEN: telegram_bot_token,
           DATABASE_URL:       process.env.DATABASE_URL,
           MASTER_KEY:         process.env.MASTER_KEY,
-          ANTHROPIC_API_KEY:  process.env.ANTHROPIC_API_KEY,
           OPENAI_API_KEY:     process.env.OPENAI_API_KEY,
         },
       });
@@ -145,15 +144,20 @@ export async function usersRoutes(app) {
         TELEGRAM_BOT_TOKEN: telegram_bot_token,
         DATABASE_URL:       process.env.DATABASE_URL,
         MASTER_KEY:         process.env.MASTER_KEY,
-        ANTHROPIC_API_KEY:  process.env.ANTHROPIC_API_KEY,
         OPENAI_API_KEY:     process.env.OPENAI_API_KEY,
       },
     });
 
+    // UPSERT — earlier provisioning may have failed before any instances row was written.
     await pool.query(
-      `UPDATE instances SET container_id = $2, container_name = $3, started_at = now(), last_seen_at = now()
-        WHERE user_id = $1`,
-      [id, containerInfo.id, containerInfo.name]
+      `INSERT INTO instances (user_id, container_id, container_name, bot_name, started_at, last_seen_at)
+       VALUES ($1, $2, $3, $4, now(), now())
+       ON CONFLICT (user_id) DO UPDATE
+         SET container_id   = EXCLUDED.container_id,
+             container_name = EXCLUDED.container_name,
+             started_at     = now(),
+             last_seen_at   = now()`,
+      [id, containerInfo.id, containerInfo.name, user.telegram_bot_name]
     );
     await audit({ actorRole: "admin", action: "restart", targetType: "user", targetId: id });
     reply.send({ container: containerInfo });

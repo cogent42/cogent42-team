@@ -2,7 +2,12 @@
 FROM node:20-alpine
 WORKDIR /app
 
-RUN apk add --no-cache git
+# git: needed by some Agent SDK tooling. ripgrep + bash: used by the `claude` CLI for tool execution.
+RUN apk add --no-cache git ripgrep bash
+
+# Install Claude Code globally so the Agent SDK can spawn `claude` from PATH.
+# Auth lives in /root/.claude, which is bind-mounted from the host's CLAUDE_CODE_HOME at runtime.
+RUN npm install -g @anthropic-ai/claude-code
 
 COPY package.json package-lock.json* ./
 COPY packages/db/package.json     packages/db/package.json

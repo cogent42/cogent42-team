@@ -22,6 +22,9 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Bound to localhost only — host-run scripts (npm run migrate) connect via 127.0.0.1.
+    ports:
+      - "127.0.0.1:5432:5432"
     networks: [cogent42-internal]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -38,7 +41,6 @@ services:
       DATABASE_URL:               postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MASTER_KEY:                 ${MASTER_KEY}
       ADMIN_TOKEN:                ${ADMIN_TOKEN}
-      ANTHROPIC_API_KEY:          ${ANTHROPIC_API_KEY}
       OPENAI_API_KEY:             ${OPENAI_API_KEY}
       GOOGLE_CLIENT_ID:           ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET:       ${GOOGLE_CLIENT_SECRET}
@@ -48,6 +50,8 @@ services:
       BOT_NETWORK:                cogent42-internal
       BOT_MEM_LIMIT:              ${BOT_MEM_LIMIT}
       BOT_CPU_LIMIT:              ${BOT_CPU_LIMIT}
+      # Forwarded to provisioned bot containers as the host-side bind source for /root/.claude.
+      CLAUDE_CODE_HOME:           ${CLAUDE_CODE_HOME}
     ports:
       - "${CONTROL_PLANE_PORT:-8080}:8080"
     volumes:
@@ -62,9 +66,11 @@ services:
     environment:
       DATABASE_URL:           postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MASTER_KEY:             ${MASTER_KEY}
-      ANTHROPIC_API_KEY:      ${ANTHROPIC_API_KEY}
       OPENAI_API_KEY:         ${OPENAI_API_KEY}
       EXTRACTION_CONCURRENCY: ${EXTRACTION_CONCURRENCY}
+    volumes:
+      # Share the host's Claude Code session — the SDK spawns the `claude` CLI which reads creds from here.
+      - ${CLAUDE_CODE_HOME}:/root/.claude
     networks: [cogent42-internal]
 
   gmail-worker:

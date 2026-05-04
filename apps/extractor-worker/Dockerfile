@@ -2,6 +2,12 @@
 FROM node:20-alpine
 WORKDIR /app
 
+RUN apk add --no-cache git ripgrep bash
+
+# Install Claude Code globally so the Agent SDK can spawn `claude` from PATH.
+# Auth lives in /root/.claude, bind-mounted from CLAUDE_CODE_HOME by docker-compose.
+RUN npm install -g @anthropic-ai/claude-code
+
 COPY package.json package-lock.json* ./
 COPY packages/db/package.json                packages/db/package.json
 COPY packages/shared/package.json            packages/shared/package.json

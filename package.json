@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "setup": "node scripts/setup.js",
-    "migrate": "node scripts/migrate.js",
+    "migrate": "node --env-file=.env scripts/migrate.js",
     "build:bot": "docker build -t cogent42-team/bot:latest -f apps/bot/Dockerfile .",
     "build:control-plane": "docker build -t cogent42-team/control-plane:latest -f apps/control-plane/Dockerfile .",
     "build:extractor": "docker build -t cogent42-team/extractor-worker:latest -f apps/extractor-worker/Dockerfile .",
