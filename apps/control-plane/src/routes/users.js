@@ -51,14 +51,19 @@ export async function usersRoutes(app) {
       containerInfo = await provisionBot({
         user: { id: userId, slug },
         env: {
-          OWNER_USER_ID:      userId,
-          OWNER_EMAIL:        email,
-          BOT_NAME:           bot_name,
-          TELEGRAM_USER_ID:   String(telegram_user_id),
-          TELEGRAM_BOT_TOKEN: telegram_bot_token,
-          DATABASE_URL:       process.env.DATABASE_URL,
-          MASTER_KEY:         process.env.MASTER_KEY,
-          OPENAI_API_KEY:     process.env.OPENAI_API_KEY,
+          OWNER_USER_ID:             userId,
+          OWNER_EMAIL:               email,
+          BOT_NAME:                  bot_name,
+          TELEGRAM_USER_ID:          String(telegram_user_id),
+          TELEGRAM_BOT_TOKEN:        telegram_bot_token,
+          DATABASE_URL:              process.env.DATABASE_URL,
+          MASTER_KEY:                process.env.MASTER_KEY,
+          OPENAI_API_KEY:            process.env.OPENAI_API_KEY,
+          // Forwarded so the bot can mint Gmail consent URLs in /gmail without
+          // needing admin-token access to the control-plane. Client *secret* is
+          // intentionally NOT forwarded — token exchange happens on the callback.
+          GOOGLE_CLIENT_ID:          process.env.GOOGLE_CLIENT_ID || "",
+          GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || "",
         },
       });
     } catch (err) {
@@ -141,10 +146,12 @@ export async function usersRoutes(app) {
         OWNER_EMAIL:        user.email,
         BOT_NAME:           user.telegram_bot_name,
         TELEGRAM_USER_ID:   String(user.telegram_user_id),
-        TELEGRAM_BOT_TOKEN: telegram_bot_token,
-        DATABASE_URL:       process.env.DATABASE_URL,
-        MASTER_KEY:         process.env.MASTER_KEY,
-        OPENAI_API_KEY:     process.env.OPENAI_API_KEY,
+        TELEGRAM_BOT_TOKEN:        telegram_bot_token,
+        DATABASE_URL:              process.env.DATABASE_URL,
+        MASTER_KEY:                process.env.MASTER_KEY,
+        OPENAI_API_KEY:            process.env.OPENAI_API_KEY,
+        GOOGLE_CLIENT_ID:          process.env.GOOGLE_CLIENT_ID || "",
+        GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || "",
       },
     });
 
