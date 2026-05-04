@@ -3,9 +3,30 @@
 //   /forget X   — soft-delete the top-N matching facts owned by this user
 //   /private ID — flip a fact's ACL to private
 //   /recent     — last 10 extracted facts for this user
+//   /gmail      — DM the owner a Google OAuth consent URL to connect their Gmail
 
 import { pool, audit } from "@cogent42-team/db";
 import { flushSession } from "./session.js";
+
+const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+
+// We construct the Google OAuth consent URL ourselves rather than pulling in the
+// googleapis SDK just for this — only the client_id and redirect_uri are needed
+// at URL-mint time. Token exchange happens on the control-plane callback, where
+// the SDK is already a dependency.
+function buildGmailConsentUrl({ userId, clientId, redirectUri }) {
+  const params = new URLSearchParams({
+    client_id:              clientId,
+    redirect_uri:           redirectUri,
+    response_type:          "code",
+    scope:                  GMAIL_SCOPE,
+    access_type:            "offline",
+    prompt:                 "consent",
+    state:                  userId,
+    include_granted_scopes: "true",
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
 
 export async function handleSlashCommand({ userId, command }) {
   const [cmd, ...rest] = command.trim().split(/\s+/);
@@ -65,12 +86,33 @@ export async function handleSlashCommand({ userId, command }) {
       return `Marked private:\n` + rows.map((r) => `- ${r.fact}`).join("\n");
     }
 
+    case "/gmail": {
+      const clientId    = process.env.GOOGLE_CLIENT_ID;
+      const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+      if (!clientId || !redirectUri) {
+        return "Gmail integration isn't configured on this deployment yet — ask your admin to set GOOGLE_CLIENT_ID and GOOGLE_OAUTH_REDIRECT_URI on the control-plane.";
+      }
+      const url = buildGmailConsentUrl({ userId, clientId, redirectUri });
+      await audit({
+        actorUserId: userId, actorRole: "bot", action: "gmail.consent_url_minted",
+        targetType: "user", targetId: userId,
+      });
+      return [
+        "Connect your Gmail (signs into your own Google account, grants read-only access):",
+        "",
+        url,
+        "",
+        "After you finish the consent flow, your sent emails will start being extracted into your knowledge base within a minute. Run /done any time to flush the current chat too.",
+      ].join("\n");
+    }
+
     case "/help":
       return [
         "/done — flush current session for knowledge extraction",
         "/recent — last 10 extracted facts",
         "/forget <text> — delete facts matching text",
         "/private <id> — flip a fact to private (use prefix from /recent)",
+        "/gmail — connect your Gmail account (read-only, sent folder by default)",
       ].join("\n");
 
     default:
