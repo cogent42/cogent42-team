@@ -11,6 +11,7 @@ import { buildSystemPrompt } from "./prompt.js";
 import { appendChatMessage, flushIdleSessions } from "./session.js";
 import { registerInstance, heartbeat } from "./instance.js";
 import { handleSlashCommand } from "./commands.js";
+import { mdToTelegramHtml, startTypingLoop, chunkForTelegram } from "./format.js";
 
 const {
   OWNER_USER_ID,
@@ -63,6 +64,10 @@ bot.on("text", async (ctx) => {
       : { type: "preset", preset: "claude_code" },
   };
 
+  // Show "typing…" in the user's chat for the entire round-trip. The action
+  // expires every ~5s, so the helper re-sends every 4s until we cancel.
+  const stopTyping = startTypingLoop(ctx);
+
   let reply = "";
   try {
     for await (const msg of query({ prompt: text, options })) {
@@ -70,22 +75,26 @@ bot.on("text", async (ctx) => {
     }
   } catch (err) {
     reply = `Error: ${err.message}`;
+  } finally {
+    stopTyping();
   }
 
   reply = reply || "(no response)";
   await appendChatMessage(OWNER_USER_ID, "assistant", reply);
 
-  // Telegram caps messages at 4096 chars; chunk if needed.
-  for (const chunk of chunkText(reply, 4000)) {
-    await ctx.reply(chunk).catch((e) => console.error("send failed:", e.message));
+  // Send each chunk as Telegram-HTML so **bold** etc. actually render. If the
+  // HTML is malformed for any reason, fall back to the raw text — losing the
+  // formatting beats failing to deliver.
+  for (const chunk of chunkForTelegram(reply)) {
+    const html = mdToTelegramHtml(chunk);
+    try {
+      await ctx.reply(html, { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+    } catch (err) {
+      console.error("HTML send failed:", err.message, "— retrying as plain text");
+      await ctx.reply(chunk).catch((e) => console.error("plain send failed:", e.message));
+    }
   }
 });
-
-function chunkText(s, n) {
-  const out = [];
-  for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n));
-  return out;
-}
 
 // Background loops — every bot container runs its own sweep, scoped to its owner.
 setInterval(() => heartbeat(OWNER_USER_ID).catch((e) => console.error("heartbeat:", e.message)), 30_000);
