@@ -11,7 +11,7 @@ import path from "node:path";
 import { pool, audit } from "@cogent42-team/db";
 
 import { buildSystemPrompt } from "./prompt.js";
-import { appendChatMessage, flushIdleSessions } from "./session.js";
+import { appendChatMessage, flushIdleSessions, getOpenSessionMessages } from "./session.js";
 import { registerInstance, heartbeat } from "./instance.js";
 import { handleSlashCommand } from "./commands.js";
 import { mdToTelegramHtml, startTypingLoop, chunkForTelegram } from "./format.js";
@@ -41,6 +41,29 @@ const ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSear
 // fast rather than mid-Claude-turn.
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const UPLOAD_DIR     = "/tmp/cogent42-uploads";
+
+// Within-session memory: how many recent turns to replay into the prompt so the
+// model can resolve "this", "that", and follow-ups. The Agent SDK's query()
+// takes a single string per call — there's no built-in conversation-history
+// channel — so we package recent turns as a transcript inside the current
+// prompt. 20 messages ≈ 10 user/assistant pairs, comfortably under the prompt
+// budget for any realistic Telegram exchange. Anything older still survives
+// across turns by going through extraction → knowledge_entries → retrieval.
+const SESSION_HISTORY_LIMIT = 20;
+
+function formatSessionHistory(messages) {
+  if (!messages || messages.length === 0) return "";
+  const recent = messages.slice(-SESSION_HISTORY_LIMIT);
+  const transcript = recent
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${String(m.content || "").slice(0, 4000)}`)
+    .join("\n\n");
+  return (
+    `Recent conversation in this Telegram session (oldest first). ` +
+    `Use this to resolve references like "this", "that", "they" in the new message:\n\n` +
+    `${transcript}\n\n` +
+    `──── new message from User follows ────\n\n`
+  );
+}
 
 await fs.mkdir(UPLOAD_DIR, { recursive: true });
 await registerInstance({ userId: OWNER_USER_ID, botName: BOT_NAME });
@@ -72,6 +95,13 @@ async function downloadTelegramFile(ctx, fileId, suggestedName = "file") {
 }
 
 async function runAndReply(ctx, { logged, prompt }) {
+  // Read the in-flight session BEFORE appending the current turn — what's there
+  // is the prior conversation, which we'll splice into the prompt so the model
+  // can resolve follow-up references. Without this, every user message hits the
+  // SDK as a cold start and "okay, who's the escalation person?" looks like a
+  // question with no antecedent.
+  const history = await getOpenSessionMessages(OWNER_USER_ID);
+
   await appendChatMessage(OWNER_USER_ID, "user", logged);
 
   const systemAppend = await buildSystemPrompt({
@@ -90,11 +120,13 @@ async function runAndReply(ctx, { logged, prompt }) {
       : { type: "preset", preset: "claude_code" },
   };
 
+  const fullPrompt = formatSessionHistory(history) + (typeof prompt === "string" ? prompt : logged);
+
   const stopTyping = startTypingLoop(ctx);
 
   let reply = "";
   try {
-    for await (const msg of query({ prompt, options })) {
+    for await (const msg of query({ prompt: fullPrompt, options })) {
       if (msg.type === "result" && msg.subtype === "success") reply = msg.result || "";
     }
   } catch (err) {

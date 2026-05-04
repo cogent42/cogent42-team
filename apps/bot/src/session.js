@@ -6,6 +6,22 @@ import { pool } from "@cogent42-team/db";
 const IDLE_FLUSH_MS = 60_000;
 const MAX_MESSAGES_PER_SESSION = 100;
 
+/**
+ * Read the messages from the user's currently-open session, oldest first.
+ * Returns [] when no session is open (cold start). Caller is expected to call
+ * this BEFORE `appendChatMessage`, so the returned history doesn't include the
+ * turn that's about to be processed — it's exactly the prior conversation.
+ */
+export async function getOpenSessionMessages(userId) {
+  const { rows } = await pool.query(
+    `SELECT messages FROM chat_sessions
+      WHERE user_id = $1 AND flushed_at IS NULL
+      ORDER BY last_msg_at DESC LIMIT 1`,
+    [userId]
+  );
+  return rows[0]?.messages || [];
+}
+
 /** Append to the user's most recent open session, or create one. */
 export async function appendChatMessage(userId, role, content) {
   const { rows } = await pool.query(
