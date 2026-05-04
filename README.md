@@ -207,6 +207,7 @@ Total elapsed: ~3 seconds. The user can immediately DM their bot.
 | Command | Effect |
 |---|---|
 | (any text) | Ask Claude Code, with hybrid-retrieved knowledge injected into the system prompt |
+| (photo / file) | Upload via Telegram; the bot saves it under `/tmp/cogent42-uploads/` inside its container and tells Claude where to find it. Claude Code's `Read` tool handles images (vision) and PDFs natively. |
 | `/done` | Flush the current chat session for fact extraction (default is idle-flush after 60s) |
 | `/recent` | Show the last 10 facts extracted from this user |
 | `/forget <text>` | Soft-delete the top 3 facts matching the text fragment |
@@ -236,8 +237,11 @@ Telegram chat ends (60s idle, or /done)
        returns: [{fact, category, importance}, ...]
   → for each fact:
       embed via OpenAI text-embedding-3-small @ 1024d
-      vector-search owner's existing facts; if cosine < 0.10 → supersede
+      vector-search owner's existing facts; if cosine < 0.20 → supersede
       INSERT INTO knowledge_entries (acl resolved by category + share_to_team flag)
+  → if owner crosses 80% of MAX_KNOWLEDGE_ENTRIES, AI-driven consolidation
+      runs (throttled to once per 6h) — Sonnet groups paraphrases into
+      canonical rows; merged rows get superseded_by + deleted_at.
   → audit_log row written
 ```
 

@@ -3,6 +3,7 @@
 import { pool } from "@cogent42-team/db";
 import { embed, toPgVector } from "@cogent42-team/shared/embeddings";
 import { CATEGORIES, defaultAclFor, MAX_KNOWLEDGE_ENTRIES } from "@cogent42-team/shared/categories";
+import { consolidateIfOver } from "./consolidate.js";
 
 // Cosine-distance threshold under which a new fact is treated as a paraphrase
 // of an existing one (the old gets `superseded_by` the new). 0.10 was too
@@ -85,8 +86,19 @@ async function insertEntry({ userId, fact, category, importance, acl, source, so
   return rows[0];
 }
 
-/** Prune oldest non-permanent rows when a user crosses MAX_KNOWLEDGE_ENTRIES. */
+/**
+ * Keep a user's active fact count manageable. Two-step:
+ *   1. AI-driven consolidation: above 80% of cap, ask Sonnet to merge
+ *      paraphrase groups into canonical rows (throttled to 6h/user).
+ *   2. Hard fallback: if still above the hard cap after consolidation
+ *      (or if consolidation is throttled / errored), soft-delete the
+ *      oldest non-permanent rows.
+ */
 async function prune(userId) {
+  await consolidateIfOver(userId).catch((e) =>
+    console.error(`[prune ${userId.slice(0, 8)}] consolidate failed:`, e.message)
+  );
+
   const { rows } = await pool.query(
     `SELECT COUNT(*)::int AS n FROM knowledge_entries
       WHERE owner_user_id = $1 AND deleted_at IS NULL`,
