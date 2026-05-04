@@ -130,22 +130,27 @@ export async function consolidateIfOver(userId) {
     // ACL of the canonical: most-restrictive of the merged group. If any was
     // private, the merged result stays private. Same for `permanent` — if any
     // member was permanent, the result is permanent (sticky retention).
+    // Evidence count: SUM the merged group's counts so the reinforcement signal
+    // accumulates across consolidation rather than resetting to 1.
     const { rows: merged } = await pool.query(
       `SELECT BOOL_OR(acl = 'private') AS any_private,
-              BOOL_OR(importance = 'permanent') AS any_perm
+              BOOL_OR(importance = 'permanent') AS any_perm,
+              COALESCE(SUM(evidence_count), 1)::int AS total_evidence
          FROM knowledge_entries
         WHERE id = ANY($1::uuid[]) AND owner_user_id = $2`,
       [mergedIds, userId]
     );
-    const acl        = merged[0]?.any_private ? "private" : defaultAclFor(category);
-    const importance = merged[0]?.any_perm ? "permanent" : "normal";
+    const acl           = merged[0]?.any_private ? "private" : defaultAclFor(category);
+    const importance    = merged[0]?.any_perm ? "permanent" : "normal";
+    const totalEvidence = merged[0]?.total_evidence || mergedIds.length;
 
     const { rows: ins } = await pool.query(
       `INSERT INTO knowledge_entries
-         (owner_user_id, fact, category, importance, acl, source, embedding)
-       VALUES ($1, $2, $3, $4, $5, 'consolidated', $6::vector)
+         (owner_user_id, fact, category, importance, acl, source, embedding,
+          evidence_count, last_validated_at)
+       VALUES ($1, $2, $3, $4, $5, 'consolidated', $6::vector, $7, now())
        RETURNING id`,
-      [userId, fact, category, importance, acl, toPgVector(embedding)]
+      [userId, fact, category, importance, acl, toPgVector(embedding), totalEvidence]
     );
     const newId = ins[0].id;
 
