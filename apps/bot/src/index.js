@@ -45,7 +45,10 @@ bot.on("text", async (ctx) => {
   const text = ctx.message.text || "";
   if (text.startsWith("/")) {
     const reply = await handleSlashCommand({ userId: OWNER_USER_ID, command: text });
-    if (reply) await ctx.reply(reply);
+    // Disable link previews — Telegram's preview crawler does a GET on every URL
+    // we send. For slash commands like /me and /gmail that hand the user a
+    // single-use link, that pre-fetch redeems the link before the user clicks.
+    if (reply) await ctx.reply(reply, { link_preview_options: { is_disabled: true } });
     return;
   }
 
