@@ -64,12 +64,13 @@ export async function writeFacts({ userId, source, sourceRef, facts }) {
 }
 
 async function insertEntry({ userId, fact, category, importance, acl, source, sourceRef, embedding, supersedesId }) {
+  // No ON CONFLICT — a single source (chat session, gmail thread) legitimately
+  // produces N facts. Job-level idempotency lives on extraction_jobs.status;
+  // semantic-duplicate prevention lives on the cosine-distance check above.
   const { rows } = await pool.query(
     `INSERT INTO knowledge_entries
        (owner_user_id, fact, category, importance, acl, source, source_ref, embedding, supersedes_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector, $9)
-     ON CONFLICT (owner_user_id, source, source_ref) WHERE source_ref IS NOT NULL AND deleted_at IS NULL
-       DO UPDATE SET last_seen_at = now()
      RETURNING id, fact, category, acl`,
     [userId, fact, category, importance, acl, source, sourceRef, toPgVector(embedding), supersedesId]
   );
