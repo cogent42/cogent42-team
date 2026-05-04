@@ -67,46 +67,69 @@ export async function buildSystemPrompt({ userId, prompt, botName }) {
 
 async function retrieveContext({ userId, prompt, queryEmbedding, limit }) {
   // BM25-only path when we couldn't get an embedding.
+  let result;
   if (!queryEmbedding) {
-    return pool.query(
+    result = await pool.query(
       `SELECT ke.id, ke.fact, ke.category, ke.acl, ke.owner_user_id,
               u.email AS owner_email, u.name AS owner_name,
               (ke.owner_user_id = $1) AS is_own
          FROM knowledge_entries ke
          JOIN users u ON u.id = ke.owner_user_id
         WHERE ke.deleted_at IS NULL AND ke.superseded_by IS NULL
+          AND ke.validation_status NOT IN ('stale','contradicted')
           AND ke.last_seen_at > now() - ($3::int || ' days')::interval
           AND ke.category NOT IN ('preference','rule','personal')
           AND (ke.owner_user_id = $1 OR ke.acl IN ('team','org'))
           AND ke.fact_tsv @@ plainto_tsquery('simple', $2)
-        ORDER BY ts_rank(ke.fact_tsv, plainto_tsquery('simple', $2)) DESC
+        ORDER BY (
+          ts_rank(ke.fact_tsv, plainto_tsquery('simple', $2))
+          + LEAST((ke.evidence_count - 1) * 0.05, 0.25)
+        ) DESC
         LIMIT $4`,
       [userId, prompt, FRESHNESS_DAYS, limit]
     );
+  } else {
+    // Hybrid: BM25 + (1 - cosine) + own-knowledge bonus + permanent bonus + evidence bonus.
+    // Evidence bonus: +0.05 per re-assertion, capped at 0.25 — so a fact backed by
+    // 6+ extractions wins on tied semantic similarity over a once-mentioned one,
+    // but doesn't drown out high-similarity hits at extreme counts.
+    result = await pool.query(
+      `SELECT ke.id, ke.fact, ke.category, ke.acl, ke.owner_user_id,
+              u.email AS owner_email, u.name AS owner_name,
+              (ke.owner_user_id = $1) AS is_own
+         FROM knowledge_entries ke
+         JOIN users u ON u.id = ke.owner_user_id
+        WHERE ke.deleted_at IS NULL AND ke.superseded_by IS NULL
+          AND ke.validation_status NOT IN ('stale','contradicted')
+          AND ke.last_seen_at > now() - ($4::int || ' days')::interval
+          AND ke.category NOT IN ('preference','rule','personal')
+          AND (ke.owner_user_id = $1 OR ke.acl IN ('team','org'))
+          AND (
+            ke.fact_tsv @@ plainto_tsquery('simple', $2)
+            OR (ke.embedding IS NOT NULL AND (ke.embedding <=> $3::vector) < 0.45)
+          )
+        ORDER BY (
+          COALESCE(ts_rank(ke.fact_tsv, plainto_tsquery('simple', $2)), 0)
+          + CASE WHEN ke.embedding IS NULL THEN 0 ELSE (1 - (ke.embedding <=> $3::vector)) END
+          + CASE WHEN ke.owner_user_id = $1 THEN 0.2 ELSE 0 END
+          + CASE WHEN ke.importance = 'permanent' THEN 0.1 ELSE 0 END
+          + LEAST((ke.evidence_count - 1) * 0.05, 0.25)
+        ) DESC
+        LIMIT $5`,
+      [userId, prompt, toPgVector(queryEmbedding), FRESHNESS_DAYS, limit]
+    );
   }
 
-  // Hybrid: BM25 score + (1 - cosine distance) + own-knowledge bonus + permanent bonus.
-  return pool.query(
-    `SELECT ke.id, ke.fact, ke.category, ke.acl, ke.owner_user_id,
-            u.email AS owner_email, u.name AS owner_name,
-            (ke.owner_user_id = $1) AS is_own
-       FROM knowledge_entries ke
-       JOIN users u ON u.id = ke.owner_user_id
-      WHERE ke.deleted_at IS NULL AND ke.superseded_by IS NULL
-        AND ke.last_seen_at > now() - ($4::int || ' days')::interval
-        AND ke.category NOT IN ('preference','rule','personal')
-        AND (ke.owner_user_id = $1 OR ke.acl IN ('team','org'))
-        AND (
-          ke.fact_tsv @@ plainto_tsquery('simple', $2)
-          OR (ke.embedding IS NOT NULL AND (ke.embedding <=> $3::vector) < 0.45)
-        )
-      ORDER BY (
-        COALESCE(ts_rank(ke.fact_tsv, plainto_tsquery('simple', $2)), 0)
-        + CASE WHEN ke.embedding IS NULL THEN 0 ELSE (1 - (ke.embedding <=> $3::vector)) END
-        + CASE WHEN ke.owner_user_id = $1 THEN 0.2 ELSE 0 END
-        + CASE WHEN ke.importance = 'permanent' THEN 0.1 ELSE 0 END
-      ) DESC
-      LIMIT $5`,
-    [userId, prompt, toPgVector(queryEmbedding), FRESHNESS_DAYS, limit]
-  );
+  // Drift signal: refresh last_seen_at on facts that just got injected. With this,
+  // a fact actively being used stays in the freshness window indefinitely; one that
+  // hasn't been retrieved in 90 days ages out. Fire-and-forget — not worth blocking
+  // the prompt response on this update completing.
+  if (result.rows.length > 0) {
+    const ids = result.rows.map((r) => r.id);
+    pool
+      .query(`UPDATE knowledge_entries SET last_seen_at = now() WHERE id = ANY($1::uuid[])`, [ids])
+      .catch((e) => console.error("[prompt] last_seen_at refresh failed:", e.message));
+  }
+
+  return result;
 }

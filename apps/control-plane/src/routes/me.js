@@ -171,7 +171,9 @@ export async function meApiRoutes(app) {
     vals.push(limit, offset);
 
     const { rows } = await pool.query(
-      `SELECT id, fact, category, importance, acl, source, source_ref, created_at, last_seen_at
+      `SELECT id, fact, category, importance, acl, source, source_ref,
+              evidence_count, validation_status, last_validated_at,
+              created_at, last_seen_at
          FROM knowledge_entries
         WHERE ${conds.join(" AND ")}
         ORDER BY created_at DESC
