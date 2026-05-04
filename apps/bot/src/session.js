@@ -1,25 +1,46 @@
 // Working memory for the active Telegram conversation.
 // On idle (≥60s) or /done, the session is flushed to extraction_jobs.
+//
+// Note the deliberate split between two windows that operate on the same table:
+//   - Extraction window (IDLE_FLUSH_MS = 60s): when's the conversation "settled
+//     enough" for the extractor to pull facts from it? Short, so facts hit
+//     knowledge_entries quickly.
+//   - Replay window (REPLAY_LOOKBACK_MIN, default 60 min): when does the user's
+//     mental model of "we're still talking about this" expire? Longer, because
+//     people walk away from a chat for coffee/lunch/calls and expect to pick
+//     back up. Tied to whatever the user does NEXT, not to the extractor's
+//     idea of a complete unit.
+// Coupling these two — as we'd be doing if replay only read the open session —
+// means tweaking one knob has the wrong side-effect on the other.
 
 import { pool } from "@cogent42-team/db";
 
 const IDLE_FLUSH_MS = 60_000;
 const MAX_MESSAGES_PER_SESSION = 100;
+const REPLAY_LOOKBACK_MIN_DEFAULT = 60;
 
 /**
- * Read the messages from the user's currently-open session, oldest first.
- * Returns [] when no session is open (cold start). Caller is expected to call
- * this BEFORE `appendChatMessage`, so the returned history doesn't include the
- * turn that's about to be processed — it's exactly the prior conversation.
+ * Recent conversation messages for the user, chronological, oldest first.
+ *
+ * Crosses session boundaries: pulls every chat_sessions row whose `last_msg_at`
+ * falls within the lookback window — open or flushed — flattens their `messages`
+ * arrays, and sorts the result by each message's per-message `at` timestamp so
+ * a flushed-then-resumed conversation looks like one continuous transcript.
+ *
+ * Caller should call this BEFORE `appendChatMessage` so the returned history is
+ * the prior conversation, not the turn being processed.
  */
-export async function getOpenSessionMessages(userId) {
+export async function getRecentSessionMessages(userId, lookbackMinutes = REPLAY_LOOKBACK_MIN_DEFAULT) {
   const { rows } = await pool.query(
     `SELECT messages FROM chat_sessions
-      WHERE user_id = $1 AND flushed_at IS NULL
-      ORDER BY last_msg_at DESC LIMIT 1`,
-    [userId]
+      WHERE user_id = $1
+        AND last_msg_at > now() - ($2::int || ' minutes')::interval
+      ORDER BY last_msg_at ASC`,
+    [userId, lookbackMinutes]
   );
-  return rows[0]?.messages || [];
+  return rows
+    .flatMap((r) => r.messages || [])
+    .sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
 }
 
 /** Append to the user's most recent open session, or create one. */
