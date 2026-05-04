@@ -57,6 +57,8 @@ async function main() {
   }
   out.OPENAI_API_KEY    = await ask("OPENAI_API_KEY (for embeddings)");
 
+  out.ADMIN_CONTACT_EMAIL = await ask("Admin contact email shown on the public landing page (optional)", "");
+
   // Gmail OAuth (optional)
   console.log("\nGmail OAuth — optional. Press enter to skip; you can add later.");
   out.GOOGLE_CLIENT_ID          = await ask("GOOGLE_CLIENT_ID", "");

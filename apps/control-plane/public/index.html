@@ -11,28 +11,28 @@
   header { padding: 14px 20px; border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
   header h1 { font-size: 16px; margin:0; font-weight:600; letter-spacing:0.2px; }
   header h1 span { color: var(--accent); }
-  main { max-width: 880px; margin: 0 auto; padding: 32px 22px 60px; }
+  main { max-width: 820px; margin: 0 auto; padding: 36px 22px 60px; }
 
   /* Landing */
-  .hero { padding: 24px 0 16px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
-  .hero h2 { font-size: 28px; margin: 0 0 10px; line-height: 1.2; font-weight: 600; }
-  .hero p { color: var(--muted); margin: 0; max-width: 640px; }
-  section { margin: 28px 0; }
-  section h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
-  .step { display: flex; gap: 14px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
+  .hero { padding: 12px 0 28px; }
+  .hero h2 { font-size: 30px; margin: 0 0 12px; line-height: 1.2; font-weight: 600; }
+  .hero p { color: var(--muted); margin: 0; max-width: 640px; font-size: 16px; }
+  section { margin: 36px 0; }
+  section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0 0 16px; font-weight: 600; }
+  .step { display: flex; gap: 14px; padding: 16px 18px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
   .step .n { color: var(--accent); font-weight: 600; min-width: 22px; flex-shrink: 0; }
   .step strong { color: var(--fg); }
   .step .desc { flex: 1; }
-  .step code, code.inline { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
-  .commands { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
-  .commands div { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .commands b { color: var(--accent); font-weight: 600; }
-  .commands span { color: var(--muted); }
-  .callout { padding: 14px 16px; background: rgba(122,162,247,0.08); border: 1px solid rgba(122,162,247,0.25); border-radius: 10px; color: var(--fg); }
+  .step a { color: var(--accent); }
+  .commands { padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .commands div { font: 14px/1.7 -apple-system, system-ui, sans-serif; }
+  .commands b { color: var(--accent); font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .commands span { color: var(--muted); margin-left: 8px; }
+  .callout { padding: 16px 18px; background: rgba(122,162,247,0.08); border: 1px solid rgba(122,162,247,0.25); border-radius: 10px; color: var(--fg); }
   .callout a { color: var(--accent); }
 
   /* Admin section */
-  .admin-divider { margin: 60px 0 20px; border-top: 1px dashed var(--line); padding-top: 24px; }
+  .admin-divider { margin: 80px 0 20px; border-top: 1px dashed var(--line); padding-top: 28px; }
   .admin-divider h3 { color: var(--muted); }
   #login.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
   #login label { display:block; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
@@ -76,72 +76,73 @@
   <!-- ────────── Public landing ────────── -->
   <div id="landing">
     <div class="hero">
-      <h2>Your team's brain, one Telegram bot per teammate.</h2>
-      <p>Each member gets a personal AI agent on Telegram, backed by a shared knowledge base. Decisions, projects, server info, and workflows are auto-extracted from chat and sent emails. Private preferences and personal notes never leave your bot.</p>
+      <h2>Your team's brain, on Telegram.</h2>
+      <p>Every teammate gets a personal AI assistant. Decisions, project details, server info, and the things you discover get remembered automatically — so the next person who asks doesn't have to start from scratch. Personal stuff stays personal.</p>
     </div>
 
     <section>
-      <h3>Get set up (for new users)</h3>
+      <h3>Getting started</h3>
 
       <div class="step">
         <div class="n">1.</div>
         <div class="desc">
-          <strong>Create a Telegram bot.</strong> DM <a href="https://t.me/BotFather" style="color:var(--accent)">@BotFather</a> on Telegram, run <code>/newbot</code>, pick a name and username (must end in <code>bot</code>). BotFather will hand you an HTTP API token — copy it.
+          <strong>Create your own Telegram bot.</strong> On Telegram, message <a href="https://t.me/BotFather">@BotFather</a> and send <em>/newbot</em>. Pick any name and a username (it has to end in <em>bot</em>). BotFather will give you a long token — copy it.
         </div>
       </div>
 
       <div class="step">
         <div class="n">2.</div>
         <div class="desc">
-          <strong>Find your numeric Telegram user ID.</strong> DM <a href="https://t.me/userinfobot" style="color:var(--accent)">@userinfobot</a> — it'll reply with your numeric ID (like <code>390910591</code>).
+          <strong>Get your Telegram ID.</strong> Message <a href="https://t.me/userinfobot">@userinfobot</a>. It replies with a number — that's your ID.
         </div>
       </div>
 
       <div class="step">
         <div class="n">3.</div>
         <div class="desc">
-          <strong>Send your admin three things:</strong> your work email, your numeric Telegram ID, and the bot token from BotFather. Your admin will provision your bot in this control plane — it spins up a dedicated container scoped to your account.
+          <strong>Send your admin three things:</strong> your work email, your Telegram ID (from step 2), and the bot token (from step 1). They'll set you up.
         </div>
       </div>
 
       <div class="step">
         <div class="n">4.</div>
         <div class="desc">
-          <strong>Once provisioned, DM your bot.</strong> Anything you say goes through Claude with the team's shared knowledge as context. Conversations are auto-extracted into knowledge entries after 60 seconds of idle, or immediately on <code>/done</code>.
+          <strong>Start chatting.</strong> Once your admin confirms, message your bot anything — questions, work updates, decisions you've made. It uses what your team already knows to give better answers, and it remembers what you tell it for later.
         </div>
       </div>
 
       <div class="step">
         <div class="n">5.</div>
         <div class="desc">
-          <strong>Connect your Gmail (optional).</strong> Sent emails get extracted into the team brain. DM your bot <code>/gmail</code> for a one-click consent link, or ask your admin to mint one for you. The flow grants read-only access; we never touch your inbox unless you opt in.
+          <strong>Connect your Gmail (optional).</strong> Send your bot <em>/gmail</em>. It'll reply with a link. Click it, sign into your Google account, and from then on your sent emails get summarised into the team brain too. Read-only — we never look at your inbox.
         </div>
       </div>
     </section>
 
     <section>
-      <h3>Slash commands you can DM your bot</h3>
+      <h3>What you can ask your bot</h3>
       <div class="commands">
-        <div><b>/done</b> <span>flush this conversation for extraction</span></div>
-        <div><b>/recent</b> <span>last 10 facts saved for you</span></div>
-        <div><b>/forget &lt;text&gt;</b> <span>delete facts matching the text</span></div>
-        <div><b>/private &lt;id&gt;</b> <span>flip a fact to private (use prefix from /recent)</span></div>
-        <div><b>/gmail</b> <span>connect your Gmail (read-only, sent only)</span></div>
-        <div><b>/help</b> <span>list these commands</span></div>
+        <div><b>/done</b><span>save this conversation right now (otherwise it auto-saves after a minute of silence)</span></div>
+        <div><b>/recent</b><span>show the last 10 things saved for you</span></div>
+        <div><b>/forget &lt;text&gt;</b><span>delete saved items matching the text</span></div>
+        <div><b>/private &lt;id&gt;</b><span>make a saved item private (use the id shown by /recent)</span></div>
+        <div><b>/gmail</b><span>connect your Gmail (read-only, sent only)</span></div>
+        <div><b>/help</b><span>show this list inside Telegram</span></div>
       </div>
     </section>
 
     <section>
-      <h3>Privacy contract</h3>
+      <h3>What's private, what's shared</h3>
       <div class="callout">
-        Facts in the categories <code class="inline">preference</code>, <code class="inline">rule</code>, and <code class="inline">personal</code> are <strong>always private</strong> — visible only to you. Everything else (<code class="inline">project</code>, <code class="inline">decision</code>, <code class="inline">server</code>, <code class="inline">config</code>, <code class="inline">workflow</code>, <code class="inline">bug</code>, <code class="inline">mistake</code>) defaults to <strong>team-visible</strong>. You can flip any fact to private with <code class="inline">/private &lt;id&gt;</code>, and disable team-sharing entirely from the admin UI.
+        <strong>Stays only on your bot:</strong> personal preferences (how you like things done), personal context (anything about you, your family, your compensation), and any rules you set for your bot.<br><br>
+        <strong>Shared with teammates:</strong> projects, decisions, server and configuration info, workflows, and lessons learned — the kinds of things any teammate would benefit from knowing. You can flip any saved item to private with <em>/private</em> at any time.
       </div>
     </section>
 
     <section>
       <h3>Need help?</h3>
-      <div class="callout">
-        Reach out to your administrator at <a href="mailto:tech@katha.today">tech@katha.today</a> for provisioning, Gmail consent links, or anything that needs admin access.
+      <div class="callout" id="contact-callout">
+        Talk to your administrator — they can provision your bot, send you a Gmail consent link, or help with anything else.
       </div>
     </section>
 
@@ -228,6 +229,17 @@ function show(view) {
 async function checkHealth() {
   try { await fetch("/health").then(r => r.json()); $("#health").textContent = "healthy"; $("#health").classList.add("active"); }
   catch { $("#health").textContent = "down"; $("#health").classList.add("disabled"); }
+}
+
+async function loadAdminContact() {
+  try {
+    const info = await fetch("/api/info").then(r => r.json());
+    if (info?.adminEmail) {
+      $("#contact-callout").innerHTML =
+        'Talk to your administrator at <a href="mailto:' + escapeHtml(info.adminEmail) + '">' +
+        escapeHtml(info.adminEmail) + '</a> — they can provision your bot, send you a Gmail consent link, or help with anything else.';
+    }
+  } catch { /* leave the generic copy in place */ }
 }
 
 async function loadUsers() {
@@ -327,6 +339,7 @@ $("#u-create").addEventListener("click", async () => {
 $("#k-search").addEventListener("click", loadKnowledge);
 
 checkHealth();
+loadAdminContact();
 if (TOKEN) { api("/api/users").then(() => { show("app"); loadUsers(); }).catch(() => show("landing")); }
 else { show("landing"); }
 </script>
