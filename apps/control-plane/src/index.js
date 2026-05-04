@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { healthRoutes } from "./routes/health.js";
+import { infoRoutes } from "./routes/info.js";
 import { usersRoutes } from "./routes/users.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
 import { gmailRoutes } from "./routes/gmail.js";
@@ -43,8 +44,9 @@ await app.register(fastifyStatic, {
   decorateReply: false,
 });
 
-// Public — health
+// Public — health + landing-page info
 await app.register(healthRoutes);
+await app.register(infoRoutes, { prefix: "/api/info" });
 
 // Gmail OAuth callback is public (Google redirects user-agent here)
 await app.register(gmailRoutes, { prefix: "/api/gmail" });
