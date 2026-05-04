@@ -1,0 +1,15 @@
+{
+  "name": "@cogent42-team/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./crypto": "./src/crypto.js",
+    "./embeddings": "./src/embeddings.js",
+    "./categories": "./src/categories.js"
+  },
+  "dependencies": {
+    "tweetnacl": "^1.0.3"
+  }
+}

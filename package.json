@@ -1,0 +1,32 @@
+{
+  "name": "cogent42-team",
+  "version": "0.1.0",
+  "description": "Self-hosted team brain — one Telegram agent per user, Postgres-backed shared knowledge, Gmail-aware. Built on Claude Agent SDK.",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "migrate": "node scripts/migrate.js",
+    "build:bot": "docker build -t cogent42-team/bot:latest -f apps/bot/Dockerfile .",
+    "build:control-plane": "docker build -t cogent42-team/control-plane:latest -f apps/control-plane/Dockerfile .",
+    "build:extractor": "docker build -t cogent42-team/extractor-worker:latest -f apps/extractor-worker/Dockerfile .",
+    "build:gmail": "docker build -t cogent42-team/gmail-worker:latest -f apps/gmail-worker/Dockerfile .",
+    "build:all": "npm run build:bot && npm run build:control-plane && npm run build:extractor && npm run build:gmail",
+    "up": "docker compose up -d",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "author": "Harsh Vardhan Sharma",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cogent42/cogent42-team.git"
+  }
+}

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>cogent42-team · admin</title>
+<style>
+  :root { --bg:#0b0d10; --fg:#e6e6e6; --muted:#8a8f98; --accent:#7aa2f7; --card:#14171c; --line:#262a31; --warn:#e0af68; --bad:#f7768e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.5 -apple-system, system-ui, Segoe UI, Inter, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size: 16px; margin:0; font-weight:600; letter-spacing:0.2px; }
+  header h1 span { color: var(--accent); }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+  .tabs { display:flex; gap:4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+  .tab { padding: 8px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { padding: 8px 10px; text-align:left; border-bottom: 1px solid var(--line); font-size:13px; }
+  th { color: var(--muted); font-weight: 500; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  button, input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 7px 10px; border-radius: 6px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
+  .row { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+  .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size:11px; background: var(--line); color: var(--muted); }
+  .pill.team { background: #1f3a4a; color: #7dcfff; }
+  .pill.private { background: #3a1f2a; color: #f7768e; }
+  .pill.gmail { background: #2a1f3a; color: #bb9af7; }
+  .pill.chat { background: #1f3a2a; color: #9ece6a; }
+  .pill.active { background: #1f3a2a; color: #9ece6a; }
+  .pill.disabled { background: #3a1f1f; color: #f7768e; }
+  .muted { color: var(--muted); }
+  details summary { cursor:pointer; color: var(--muted); }
+  pre { background:#0e1115; padding:10px; border-radius:6px; overflow:auto; font-size:12px; }
+  .hidden { display:none; }
+  label { display:block; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+  .form-row { margin-bottom: 12px; }
+  input, select { width: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cogent42<span>·team</span></h1>
+  <div class="row">
+    <span id="health" class="pill">…</span>
+    <button id="logout" class="muted">Lock</button>
+  </div>
+</header>
+<main>
+  <div id="login" class="card">
+    <div class="form-row"><label>Admin token</label><input id="token-input" type="password" placeholder="ADMIN_TOKEN" autofocus /></div>
+    <button class="primary" id="token-submit">Unlock</button>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="tabs">
+      <div class="tab active" data-tab="users">Users</div>
+      <div class="tab" data-tab="knowledge">Knowledge</div>
+      <div class="tab" data-tab="audit">Audit log</div>
+    </div>
+
+    <div id="tab-users">
+      <div class="card">
+        <h3 style="margin-top:0">Add user</h3>
+        <div class="row">
+          <input id="u-email" placeholder="email" />
+          <input id="u-name" placeholder="full name" />
+          <input id="u-tg-id" placeholder="telegram user id (numeric)" />
+          <input id="u-bot-name" placeholder="bot name (e.g. alice-cogent)" />
+          <input id="u-token" placeholder="telegram bot token (from BotFather)" />
+          <button class="primary" id="u-create">Provision bot</button>
+        </div>
+        <p class="muted" style="margin: 8px 0 0 0">Each user gets a dedicated bot container. Telegram token is encrypted with MASTER_KEY.</p>
+      </div>
+      <div class="card"><div id="users-list">Loading…</div></div>
+    </div>
+
+    <div id="tab-knowledge" class="hidden">
+      <div class="card">
+        <div class="row">
+          <input id="k-q" placeholder="search facts" style="flex:1" />
+          <select id="k-source"><option value="">all sources</option><option value="chat">chat</option><option value="gmail">gmail</option></select>
+          <select id="k-acl"><option value="">all acl</option><option value="private">private</option><option value="team">team</option></select>
+          <button id="k-search">Search</button>
+        </div>
+      </div>
+      <div class="card"><div id="knowledge-list">Loading…</div></div>
+    </div>
+
+    <div id="tab-audit" class="hidden">
+      <div class="card"><div id="audit-list">Loading…</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let TOKEN = sessionStorage.getItem("admin_token") || "";
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { "Content-Type":"application/json", "Authorization":"Bearer "+TOKEN, ...(opts.headers||{}) },
+  });
+  if (res.status === 401) { TOKEN = ""; sessionStorage.removeItem("admin_token"); show("login"); throw new Error("unauthorized"); }
+  if (!res.ok) throw new Error(await res.text());
+  return res.headers.get("content-type")?.includes("json") ? res.json() : res.text();
+}
+
+function show(view) {
+  $("#login").classList.toggle("hidden", view !== "login");
+  $("#app").classList.toggle("hidden", view !== "app");
+}
+
+async function checkHealth() {
+  try { await fetch("/health").then(r => r.json()); $("#health").textContent = "healthy"; $("#health").classList.add("active"); }
+  catch { $("#health").textContent = "down"; $("#health").classList.add("disabled"); }
+}
+
+async function loadUsers() {
+  const { users } = await api("/api/users");
+  if (users.length === 0) { $("#users-list").innerHTML = '<p class="muted">No users yet — add one above.</p>'; return; }
+  $("#users-list").innerHTML = `<table><thead><tr>
+    <th>User</th><th>Bot</th><th>Status</th><th>Facts</th><th>Gmail</th><th>Last seen</th><th></th>
+  </tr></thead><tbody>${users.map(u => `
+    <tr>
+      <td><strong>${u.name}</strong><br><span class="muted">${u.email}</span></td>
+      <td>${u.bot_name || '<span class="muted">—</span>'}<br><span class="muted">${u.slug}</span></td>
+      <td><span class="pill ${u.status}">${u.status}</span></td>
+      <td>${u.fact_count}</td>
+      <td><span class="pill">${u.gmail_mode}</span></td>
+      <td class="muted">${u.last_seen_at ? new Date(u.last_seen_at).toLocaleString() : "never"}</td>
+      <td class="row">
+        <button onclick="restart('${u.id}')">Restart</button>
+        <button class="danger" onclick="disableUser('${u.id}')">Disable</button>
+      </td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+async function loadKnowledge() {
+  const params = new URLSearchParams();
+  const q = $("#k-q").value.trim(); if (q) params.set("q", q);
+  const src = $("#k-source").value; if (src) params.set("source", src);
+  const acl = $("#k-acl").value; if (acl) params.set("acl", acl);
+  const { entries } = await api("/api/knowledge?" + params);
+  if (entries.length === 0) { $("#knowledge-list").innerHTML = '<p class="muted">No facts match.</p>'; return; }
+  $("#knowledge-list").innerHTML = `<table><thead><tr>
+    <th>Fact</th><th>Owner</th><th>Category</th><th>ACL</th><th>Source</th><th>Created</th><th></th>
+  </tr></thead><tbody>${entries.map(e => `
+    <tr>
+      <td>${escapeHtml(e.fact)}</td>
+      <td><span class="muted">${e.owner_email}</span></td>
+      <td><span class="pill">${e.category}</span></td>
+      <td><span class="pill ${e.acl}">${e.acl}</span></td>
+      <td><span class="pill ${e.source}">${e.source}</span></td>
+      <td class="muted">${new Date(e.created_at).toLocaleDateString()}</td>
+      <td><button class="danger" onclick="deleteFact('${e.id}')">Delete</button></td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+async function loadAudit() {
+  const { events } = await api("/api/audit?limit=200");
+  $("#audit-list").innerHTML = `<table><thead><tr>
+    <th>When</th><th>Actor</th><th>Action</th><th>Target</th>
+  </tr></thead><tbody>${events.map(e => `
+    <tr>
+      <td class="muted">${new Date(e.at).toLocaleString()}</td>
+      <td>${e.actor_email || e.actor_role}</td>
+      <td><span class="pill">${e.action}</span></td>
+      <td class="muted">${e.target_type || ""} ${e.target_id ? e.target_id.slice(0,8) : ""}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+window.restart = async (id) => { await api(`/api/users/${id}/restart`, { method: "POST" }); loadUsers(); };
+window.disableUser = async (id) => { if (!confirm("Disable user and tear down bot?")) return; await api(`/api/users/${id}`, { method: "DELETE" }); loadUsers(); };
+window.deleteFact = async (id) => { if (!confirm("Soft-delete this fact?")) return; await api(`/api/knowledge/${id}`, { method: "DELETE" }); loadKnowledge(); };
+
+$("#token-submit").addEventListener("click", async () => {
+  TOKEN = $("#token-input").value.trim();
+  try { await api("/api/users"); sessionStorage.setItem("admin_token", TOKEN); show("app"); loadUsers(); }
+  catch { alert("invalid token"); }
+});
+$("#logout").addEventListener("click", () => { sessionStorage.removeItem("admin_token"); TOKEN = ""; show("login"); });
+
+document.querySelectorAll(".tab").forEach(el => el.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+  const tab = el.dataset.tab;
+  $("#tab-users").classList.toggle("hidden", tab !== "users");
+  $("#tab-knowledge").classList.toggle("hidden", tab !== "knowledge");
+  $("#tab-audit").classList.toggle("hidden", tab !== "audit");
+  if (tab === "knowledge") loadKnowledge();
+  if (tab === "audit") loadAudit();
+}));
+
+$("#u-create").addEventListener("click", async () => {
+  const body = {
+    email: $("#u-email").value.trim(),
+    name: $("#u-name").value.trim(),
+    telegram_user_id: parseInt($("#u-tg-id").value.trim(), 10),
+    bot_name: $("#u-bot-name").value.trim(),
+    telegram_bot_token: $("#u-token").value.trim(),
+  };
+  try {
+    await api("/api/users", { method: "POST", body: JSON.stringify(body) });
+    ["#u-email","#u-name","#u-tg-id","#u-bot-name","#u-token"].forEach(s => $(s).value = "");
+    loadUsers();
+  } catch (e) { alert("Failed: " + e.message); }
+});
+
+$("#k-search").addEventListener("click", loadKnowledge);
+
+checkHealth();
+if (TOKEN) { api("/api/users").then(() => { show("app"); loadUsers(); }).catch(() => show("login")); }
+else { show("login"); }
+</script>
+</body>
+</html>

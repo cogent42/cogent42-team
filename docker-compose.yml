@@ -1,0 +1,83 @@
+# cogent42-team — single-host deployment.
+# Static services declared here. Per-user bot containers are provisioned at runtime
+# by the control-plane (which talks to the Docker daemon via the mounted socket).
+
+name: cogent42-team
+
+networks:
+  cogent42-internal:
+    name: cogent42-internal
+    driver: bridge
+
+volumes:
+  pgdata:
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [cogent42-internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  control-plane:
+    image: cogent42-team/control-plane:latest
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DATABASE_URL:               postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MASTER_KEY:                 ${MASTER_KEY}
+      ADMIN_TOKEN:                ${ADMIN_TOKEN}
+      ANTHROPIC_API_KEY:          ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY:             ${OPENAI_API_KEY}
+      GOOGLE_CLIENT_ID:           ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET:       ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI:  ${GOOGLE_OAUTH_REDIRECT_URI}
+      CONTROL_PLANE_PORT:         "8080"
+      BOT_IMAGE:                  ${BOT_IMAGE}
+      BOT_NETWORK:                cogent42-internal
+      BOT_MEM_LIMIT:              ${BOT_MEM_LIMIT}
+      BOT_CPU_LIMIT:              ${BOT_CPU_LIMIT}
+    ports:
+      - "${CONTROL_PLANE_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [cogent42-internal]
+
+  extractor-worker:
+    image: cogent42-team/extractor-worker:latest
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DATABASE_URL:           postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MASTER_KEY:             ${MASTER_KEY}
+      ANTHROPIC_API_KEY:      ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY:         ${OPENAI_API_KEY}
+      EXTRACTION_CONCURRENCY: ${EXTRACTION_CONCURRENCY}
+    networks: [cogent42-internal]
+
+  gmail-worker:
+    image: cogent42-team/gmail-worker:latest
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DATABASE_URL:               postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MASTER_KEY:                 ${MASTER_KEY}
+      OPENAI_API_KEY:             ${OPENAI_API_KEY}
+      GOOGLE_CLIENT_ID:           ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET:       ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI:  ${GOOGLE_OAUTH_REDIRECT_URI}
+      GMAIL_POLL_INTERVAL_SEC:    ${GMAIL_POLL_INTERVAL_SEC}
+    networks: [cogent42-internal]

@@ -1,0 +1,16 @@
+{
+  "name": "@cogent42-team/db",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./migrations": "./migrations/"
+  },
+  "scripts": {
+    "migrate": "node ../../scripts/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
