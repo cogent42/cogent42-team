@@ -3,19 +3,44 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>cogent42-team · admin</title>
+<title>cogent42-team</title>
 <style>
   :root { --bg:#0b0d10; --fg:#e6e6e6; --muted:#8a8f98; --accent:#7aa2f7; --card:#14171c; --line:#262a31; --warn:#e0af68; --bad:#f7768e; }
   * { box-sizing: border-box; }
-  body { margin:0; font: 14px/1.5 -apple-system, system-ui, Segoe UI, Inter, sans-serif; background:var(--bg); color:var(--fg); }
+  body { margin:0; font: 15px/1.55 -apple-system, system-ui, Segoe UI, Inter, sans-serif; background:var(--bg); color:var(--fg); }
   header { padding: 14px 20px; border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
   header h1 { font-size: 16px; margin:0; font-weight:600; letter-spacing:0.2px; }
   header h1 span { color: var(--accent); }
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
-  .tabs { display:flex; gap:4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
-  .tab { padding: 8px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
-  .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 22px 60px; }
+
+  /* Landing */
+  .hero { padding: 24px 0 16px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+  .hero h2 { font-size: 28px; margin: 0 0 10px; line-height: 1.2; font-weight: 600; }
+  .hero p { color: var(--muted); margin: 0; max-width: 640px; }
+  section { margin: 28px 0; }
+  section h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .step { display: flex; gap: 14px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
+  .step .n { color: var(--accent); font-weight: 600; min-width: 22px; flex-shrink: 0; }
+  .step strong { color: var(--fg); }
+  .step .desc { flex: 1; }
+  .step code, code.inline { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+  .commands { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .commands div { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .commands b { color: var(--accent); font-weight: 600; }
+  .commands span { color: var(--muted); }
+  .callout { padding: 14px 16px; background: rgba(122,162,247,0.08); border: 1px solid rgba(122,162,247,0.25); border-radius: 10px; color: var(--fg); }
+  .callout a { color: var(--accent); }
+
+  /* Admin section */
+  .admin-divider { margin: 60px 0 20px; border-top: 1px dashed var(--line); padding-top: 24px; }
+  .admin-divider h3 { color: var(--muted); }
+  #login.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  #login label { display:block; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+  #login .row { display:flex; gap: 8px; align-items: center; }
+  #login input { flex: 1; }
+
+  /* Admin SPA (kept from before) */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
   table { width:100%; border-collapse: collapse; }
   th, td { padding: 8px 10px; text-align:left; border-bottom: 1px solid var(--line); font-size:13px; }
   th { color: var(--muted); font-weight: 500; }
@@ -33,29 +58,114 @@
   .pill.active { background: #1f3a2a; color: #9ece6a; }
   .pill.disabled { background: #3a1f1f; color: #f7768e; }
   .muted { color: var(--muted); }
-  details summary { cursor:pointer; color: var(--muted); }
-  pre { background:#0e1115; padding:10px; border-radius:6px; overflow:auto; font-size:12px; }
+  .tabs { display:flex; gap:4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+  .tab { padding: 8px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
   .hidden { display:none; }
-  label { display:block; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
   .form-row { margin-bottom: 12px; }
-  input, select { width: 100%; }
+  pre { background:#0e1115; padding:10px; border-radius:6px; overflow:auto; font-size:12px; }
 </style>
 </head>
 <body>
 <header>
   <h1>cogent42<span>·team</span></h1>
-  <div class="row">
-    <span id="health" class="pill">…</span>
-    <button id="logout" class="muted">Lock</button>
-  </div>
+  <span id="health" class="pill">…</span>
 </header>
+
 <main>
-  <div id="login" class="card">
-    <div class="form-row"><label>Admin token</label><input id="token-input" type="password" placeholder="ADMIN_TOKEN" autofocus /></div>
-    <button class="primary" id="token-submit">Unlock</button>
+  <!-- ────────── Public landing ────────── -->
+  <div id="landing">
+    <div class="hero">
+      <h2>Your team's brain, one Telegram bot per teammate.</h2>
+      <p>Each member gets a personal AI agent on Telegram, backed by a shared knowledge base. Decisions, projects, server info, and workflows are auto-extracted from chat and sent emails. Private preferences and personal notes never leave your bot.</p>
+    </div>
+
+    <section>
+      <h3>Get set up (for new users)</h3>
+
+      <div class="step">
+        <div class="n">1.</div>
+        <div class="desc">
+          <strong>Create a Telegram bot.</strong> DM <a href="https://t.me/BotFather" style="color:var(--accent)">@BotFather</a> on Telegram, run <code>/newbot</code>, pick a name and username (must end in <code>bot</code>). BotFather will hand you an HTTP API token — copy it.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="n">2.</div>
+        <div class="desc">
+          <strong>Find your numeric Telegram user ID.</strong> DM <a href="https://t.me/userinfobot" style="color:var(--accent)">@userinfobot</a> — it'll reply with your numeric ID (like <code>390910591</code>).
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="n">3.</div>
+        <div class="desc">
+          <strong>Send your admin three things:</strong> your work email, your numeric Telegram ID, and the bot token from BotFather. Your admin will provision your bot in this control plane — it spins up a dedicated container scoped to your account.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="n">4.</div>
+        <div class="desc">
+          <strong>Once provisioned, DM your bot.</strong> Anything you say goes through Claude with the team's shared knowledge as context. Conversations are auto-extracted into knowledge entries after 60 seconds of idle, or immediately on <code>/done</code>.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="n">5.</div>
+        <div class="desc">
+          <strong>Connect your Gmail (optional).</strong> Sent emails get extracted into the team brain. DM your bot <code>/gmail</code> for a one-click consent link, or ask your admin to mint one for you. The flow grants read-only access; we never touch your inbox unless you opt in.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>Slash commands you can DM your bot</h3>
+      <div class="commands">
+        <div><b>/done</b> <span>flush this conversation for extraction</span></div>
+        <div><b>/recent</b> <span>last 10 facts saved for you</span></div>
+        <div><b>/forget &lt;text&gt;</b> <span>delete facts matching the text</span></div>
+        <div><b>/private &lt;id&gt;</b> <span>flip a fact to private (use prefix from /recent)</span></div>
+        <div><b>/gmail</b> <span>connect your Gmail (read-only, sent only)</span></div>
+        <div><b>/help</b> <span>list these commands</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h3>Privacy contract</h3>
+      <div class="callout">
+        Facts in the categories <code class="inline">preference</code>, <code class="inline">rule</code>, and <code class="inline">personal</code> are <strong>always private</strong> — visible only to you. Everything else (<code class="inline">project</code>, <code class="inline">decision</code>, <code class="inline">server</code>, <code class="inline">config</code>, <code class="inline">workflow</code>, <code class="inline">bug</code>, <code class="inline">mistake</code>) defaults to <strong>team-visible</strong>. You can flip any fact to private with <code class="inline">/private &lt;id&gt;</code>, and disable team-sharing entirely from the admin UI.
+      </div>
+    </section>
+
+    <section>
+      <h3>Need help?</h3>
+      <div class="callout">
+        Reach out to your administrator at <a href="mailto:tech@katha.today">tech@katha.today</a> for provisioning, Gmail consent links, or anything that needs admin access.
+      </div>
+    </section>
+
+    <!-- Admin sign-in lives at the bottom on purpose. Users land here, not admins. -->
+    <div class="admin-divider">
+      <h3>Admin sign-in</h3>
+      <div id="login" class="card">
+        <div class="form-row"><label>Admin token</label>
+          <div class="row">
+            <input id="token-input" type="password" placeholder="ADMIN_TOKEN" />
+            <button class="primary" id="token-submit">Unlock</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- ────────── Admin SPA (hidden until token validates) ────────── -->
   <div id="app" class="hidden">
+    <div class="row" style="justify-content: space-between; margin-bottom: 16px;">
+      <span class="muted">Signed in as admin</span>
+      <button id="logout">Lock</button>
+    </div>
+
     <div class="tabs">
       <div class="tab active" data-tab="users">Users</div>
       <div class="tab" data-tab="knowledge">Knowledge</div>
@@ -105,13 +215,13 @@ async function api(path, opts = {}) {
     ...opts,
     headers: { "Content-Type":"application/json", "Authorization":"Bearer "+TOKEN, ...(opts.headers||{}) },
   });
-  if (res.status === 401) { TOKEN = ""; sessionStorage.removeItem("admin_token"); show("login"); throw new Error("unauthorized"); }
+  if (res.status === 401) { TOKEN = ""; sessionStorage.removeItem("admin_token"); show("landing"); throw new Error("unauthorized"); }
   if (!res.ok) throw new Error(await res.text());
   return res.headers.get("content-type")?.includes("json") ? res.json() : res.text();
 }
 
 function show(view) {
-  $("#login").classList.toggle("hidden", view !== "login");
+  $("#landing").classList.toggle("hidden", view !== "landing");
   $("#app").classList.toggle("hidden", view !== "app");
 }
 
@@ -127,8 +237,8 @@ async function loadUsers() {
     <th>User</th><th>Bot</th><th>Status</th><th>Facts</th><th>Gmail</th><th>Last seen</th><th></th>
   </tr></thead><tbody>${users.map(u => `
     <tr>
-      <td><strong>${u.name}</strong><br><span class="muted">${u.email}</span></td>
-      <td>${u.bot_name || '<span class="muted">—</span>'}<br><span class="muted">${u.slug}</span></td>
+      <td><strong>${escapeHtml(u.name)}</strong><br><span class="muted">${escapeHtml(u.email)}</span></td>
+      <td>${escapeHtml(u.bot_name || '—')}<br><span class="muted">${escapeHtml(u.slug)}</span></td>
       <td><span class="pill ${u.status}">${u.status}</span></td>
       <td>${u.fact_count}</td>
       <td><span class="pill">${u.gmail_mode}</span></td>
@@ -152,7 +262,7 @@ async function loadKnowledge() {
   </tr></thead><tbody>${entries.map(e => `
     <tr>
       <td>${escapeHtml(e.fact)}</td>
-      <td><span class="muted">${e.owner_email}</span></td>
+      <td><span class="muted">${escapeHtml(e.owner_email)}</span></td>
       <td><span class="pill">${e.category}</span></td>
       <td><span class="pill ${e.acl}">${e.acl}</span></td>
       <td><span class="pill ${e.source}">${e.source}</span></td>
@@ -168,13 +278,13 @@ async function loadAudit() {
   </tr></thead><tbody>${events.map(e => `
     <tr>
       <td class="muted">${new Date(e.at).toLocaleString()}</td>
-      <td>${e.actor_email || e.actor_role}</td>
+      <td>${escapeHtml(e.actor_email || e.actor_role)}</td>
       <td><span class="pill">${e.action}</span></td>
       <td class="muted">${e.target_type || ""} ${e.target_id ? e.target_id.slice(0,8) : ""}</td>
     </tr>`).join("")}</tbody></table>`;
 }
 
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
 window.restart = async (id) => { await api(`/api/users/${id}/restart`, { method: "POST" }); loadUsers(); };
 window.disableUser = async (id) => { if (!confirm("Disable user and tear down bot?")) return; await api(`/api/users/${id}`, { method: "DELETE" }); loadUsers(); };
@@ -185,7 +295,8 @@ $("#token-submit").addEventListener("click", async () => {
   try { await api("/api/users"); sessionStorage.setItem("admin_token", TOKEN); show("app"); loadUsers(); }
   catch { alert("invalid token"); }
 });
-$("#logout").addEventListener("click", () => { sessionStorage.removeItem("admin_token"); TOKEN = ""; show("login"); });
+$("#token-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#token-submit").click(); });
+$("#logout").addEventListener("click", () => { sessionStorage.removeItem("admin_token"); TOKEN = ""; show("landing"); });
 
 document.querySelectorAll(".tab").forEach(el => el.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -216,8 +327,8 @@ $("#u-create").addEventListener("click", async () => {
 $("#k-search").addEventListener("click", loadKnowledge);
 
 checkHealth();
-if (TOKEN) { api("/api/users").then(() => { show("app"); loadUsers(); }).catch(() => show("login")); }
-else { show("login"); }
+if (TOKEN) { api("/api/users").then(() => { show("app"); loadUsers(); }).catch(() => show("landing")); }
+else { show("landing"); }
 </script>
 </body>
 </html>

@@ -4,7 +4,15 @@ import { pool } from "@cogent42-team/db";
 import { embed, toPgVector } from "@cogent42-team/shared/embeddings";
 import { CATEGORIES, defaultAclFor, MAX_KNOWLEDGE_ENTRIES } from "@cogent42-team/shared/categories";
 
-const DEDUP_COSINE_DISTANCE = 0.10;   // < this → treat as duplicate, supersede
+// Cosine-distance threshold under which a new fact is treated as a paraphrase
+// of an existing one (the old gets `superseded_by` the new). 0.10 was too
+// strict — across multiple sent emails, the same business fact often gets
+// extracted with subtly different phrasings ("Expected payout volume: 7-10k…"
+// vs "Expected payout volume for RazorpayX: 7,000–10,000 payouts…") and slipped
+// past the threshold. 0.20 is a calibrated loosening: catches paraphrase pairs
+// in the live RazorpayX/IDFC corpus without collapsing genuinely distinct facts
+// (e.g. "onboarding doc checklist" vs "onboarding process flow" sit ≥0.30 apart).
+const DEDUP_COSINE_DISTANCE = 0.20;
 
 /** Resolve category to an allowed value; fallback to 'project'. */
 function normalizeCategory(c) {
