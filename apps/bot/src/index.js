@@ -11,7 +11,7 @@ import path from "node:path";
 import { pool, audit } from "@cogent42-team/db";
 
 import { buildSystemPrompt } from "./prompt.js";
-import { appendChatMessage, flushIdleSessions } from "./session.js";
+import { appendChatMessage, flushIdleSessions, getRecentSessionMessages } from "./session.js";
 import { registerInstance, heartbeat } from "./instance.js";
 import { handleSlashCommand } from "./commands.js";
 import { mdToTelegramHtml, startTypingLoop, chunkForTelegram } from "./format.js";
@@ -41,6 +41,40 @@ const ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSear
 // fast rather than mid-Claude-turn.
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const UPLOAD_DIR     = "/tmp/cogent42-uploads";
+
+// Conversational replay: how many recent turns to splice into the prompt so the
+// model can resolve "this", "that", and follow-ups. The Agent SDK's query()
+// takes a single string per call — no built-in conversation-history channel —
+// so we package recent turns as a transcript inside the current prompt.
+//
+//   SESSION_HISTORY_LIMIT       — last N messages to include (cap on prompt size).
+//   SESSION_REPLAY_LOOKBACK_MIN — how far back in wall-clock time we'll pull,
+//                                  across session boundaries. 60 min default
+//                                  lets the user walk away (coffee, a Zoom
+//                                  call, lunch) and come back to the same
+//                                  conversation. Past the lookback, the
+//                                  long-term layer (knowledge_entries) takes
+//                                  over.
+//
+// These are deliberately decoupled from the extraction window (60s idle flush
+// in session.js) — that knob exists for fact-freshness, this one for UX.
+const SESSION_HISTORY_LIMIT       = 20;
+const SESSION_REPLAY_LOOKBACK_MIN = parseInt(process.env.SESSION_REPLAY_LOOKBACK_MIN || "60", 10);
+
+function formatSessionHistory(messages) {
+  if (!messages || messages.length === 0) return "";
+  const recent = messages.slice(-SESSION_HISTORY_LIMIT);
+  const transcript = recent
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${String(m.content || "").slice(0, 4000)}`)
+    .join("\n\n");
+  return (
+    `Recent conversation with this user (oldest first). The user may have stepped ` +
+    `away and come back; treat this as one continuous thread. Use it to resolve ` +
+    `references like "this", "that", "they" in the new message:\n\n` +
+    `${transcript}\n\n` +
+    `──── new message from User follows ────\n\n`
+  );
+}
 
 await fs.mkdir(UPLOAD_DIR, { recursive: true });
 await registerInstance({ userId: OWNER_USER_ID, botName: BOT_NAME });
@@ -72,6 +106,14 @@ async function downloadTelegramFile(ctx, fileId, suggestedName = "file") {
 }
 
 async function runAndReply(ctx, { logged, prompt }) {
+  // Read the prior conversation BEFORE appending the current turn — across
+  // recent sessions within the replay lookback, not just the open one. The 60s
+  // idle flush is for extraction; conversational continuity needs a longer
+  // window because users walk away from chats and come back. Without this,
+  // every cold-start message hits the SDK with no antecedent and
+  // "okay, who's the escalation person?" looks like a question out of nowhere.
+  const history = await getRecentSessionMessages(OWNER_USER_ID, SESSION_REPLAY_LOOKBACK_MIN);
+
   await appendChatMessage(OWNER_USER_ID, "user", logged);
 
   const systemAppend = await buildSystemPrompt({
@@ -90,11 +132,13 @@ async function runAndReply(ctx, { logged, prompt }) {
       : { type: "preset", preset: "claude_code" },
   };
 
+  const fullPrompt = formatSessionHistory(history) + (typeof prompt === "string" ? prompt : logged);
+
   const stopTyping = startTypingLoop(ctx);
 
   let reply = "";
   try {
-    for await (const msg of query({ prompt, options })) {
+    for await (const msg of query({ prompt: fullPrompt, options })) {
       if (msg.type === "result" && msg.subtype === "success") reply = msg.result || "";
     }
   } catch (err) {
