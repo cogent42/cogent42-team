@@ -38,24 +38,16 @@ async function processUser(user) {
 
   let enqueued = 0;
   for (const m of messages) {
-    // Idempotency: skip if we've already extracted this gmail message_id for this user.
+    // Idempotency: skip if any extraction_jobs row exists for this (user, gmail msg id),
+    // regardless of status. We can't dedup on knowledge_entries alone — extraction can
+    // legitimately return 0 facts (no row), and we'd otherwise re-enqueue every tick.
     const existing = await pool.query(
-      `SELECT 1 FROM knowledge_entries
-        WHERE owner_user_id = $1 AND source = 'gmail' AND source_ref = $2
+      `SELECT 1 FROM extraction_jobs
+        WHERE user_id = $1 AND source = 'gmail' AND source_ref = $2
         LIMIT 1`,
       [user.id, m.id]
     );
     if (existing.rows.length > 0) continue;
-
-    // Or skip if a job for this message is already pending/processing.
-    const pending = await pool.query(
-      `SELECT 1 FROM extraction_jobs
-        WHERE user_id = $1 AND source = 'gmail' AND source_ref = $2
-          AND status IN ('pending','processing')
-        LIMIT 1`,
-      [user.id, m.id]
-    );
-    if (pending.rows.length > 0) continue;
 
     await pool.query(
       `INSERT INTO extraction_jobs (user_id, source, source_ref, payload)

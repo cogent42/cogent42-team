@@ -1,6 +1,7 @@
 // cogent42-team bot — one container per user.
 // Per-bot env: OWNER_USER_ID, OWNER_EMAIL, BOT_NAME, TELEGRAM_USER_ID, TELEGRAM_BOT_TOKEN,
-//              DATABASE_URL, MASTER_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY.
+//              DATABASE_URL, MASTER_KEY, OPENAI_API_KEY.
+// Auth for the Claude Agent SDK comes from /root/.claude (bind-mounted from host CLAUDE_CODE_HOME).
 
 import { Telegraf } from "telegraf";
 import { query } from "@anthropic-ai/claude-agent-sdk";
@@ -86,9 +87,9 @@ function chunkText(s, n) {
   return out;
 }
 
-// Background loops
+// Background loops — every bot container runs its own sweep, scoped to its owner.
 setInterval(() => heartbeat(OWNER_USER_ID).catch((e) => console.error("heartbeat:", e.message)), 30_000);
-setInterval(() => flushIdleSessions().catch((e) => console.error("flush:", e.message)), 30_000);
+setInterval(() => flushIdleSessions(OWNER_USER_ID).catch((e) => console.error("flush:", e.message)), 30_000);
 
 bot.launch().then(() => console.log(`[bot:${BOT_NAME}] listening for ${OWNER_EMAIL || OWNER_USER_ID}`));
 process.once("SIGINT",  () => bot.stop("SIGINT"));

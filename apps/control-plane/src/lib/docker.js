@@ -4,10 +4,13 @@ import Docker from "dockerode";
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
-const BOT_IMAGE   = process.env.BOT_IMAGE     || "cogent42-team/bot:latest";
-const BOT_NETWORK = process.env.BOT_NETWORK   || "cogent42-internal";
-const MEM_LIMIT   = process.env.BOT_MEM_LIMIT || "512m";
-const CPU_LIMIT   = parseFloat(process.env.BOT_CPU_LIMIT || "0.5");
+const BOT_IMAGE        = process.env.BOT_IMAGE     || "cogent42-team/bot:latest";
+const BOT_NETWORK      = process.env.BOT_NETWORK   || "cogent42-internal";
+const MEM_LIMIT        = process.env.BOT_MEM_LIMIT || "512m";
+const CPU_LIMIT        = parseFloat(process.env.BOT_CPU_LIMIT || "0.5");
+// Host path forwarded by docker-compose; bind-mounted into each bot container as /root/.claude
+// so the Agent SDK's `claude` CLI subprocess uses the host's existing Claude Code session.
+const CLAUDE_CODE_HOME = process.env.CLAUDE_CODE_HOME || "";
 
 function parseMem(s) {
   const m = String(s).match(/^(\d+)([kmg]?)$/i);
@@ -32,6 +35,10 @@ export async function provisionBot({ user, env }) {
     await old.remove({ force: true }).catch(() => {});
   } catch { /* ignore */ }
 
+  if (!CLAUDE_CODE_HOME) {
+    throw new Error("CLAUDE_CODE_HOME not set on control-plane — cannot mount Claude Code session into bot container");
+  }
+
   const Env = Object.entries(env).map(([k, v]) => `${k}=${v}`);
 
   const container = await docker.createContainer({
@@ -49,6 +56,7 @@ export async function provisionBot({ user, env }) {
       Memory: parseMem(MEM_LIMIT),
       NanoCpus: Math.round(CPU_LIMIT * 1e9),
       LogConfig: { Type: "json-file", Config: { "max-size": "10m", "max-file": "3" } },
+      Binds: [`${CLAUDE_CODE_HOME}:/root/.claude`],
     },
   });
 
