@@ -34,6 +34,9 @@ services:
 
   control-plane:
     image: cogent42-team/control-plane:latest
+    build:
+      context: .
+      dockerfile: apps/control-plane/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
@@ -62,6 +65,9 @@ services:
 
   extractor-worker:
     image: cogent42-team/extractor-worker:latest
+    build:
+      context: .
+      dockerfile: apps/extractor-worker/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
@@ -77,6 +83,9 @@ services:
 
   gmail-worker:
     image: cogent42-team/gmail-worker:latest
+    build:
+      context: .
+      dockerfile: apps/gmail-worker/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
@@ -89,3 +98,15 @@ services:
       GOOGLE_OAUTH_REDIRECT_URI:  ${GOOGLE_OAUTH_REDIRECT_URI}
       GMAIL_POLL_INTERVAL_SEC:    ${GMAIL_POLL_INTERVAL_SEC}
     networks: [cogent42-internal]
+
+  # The bot image is run per-user by the control-plane (provisioned via the
+  # Docker socket, not by compose). It's declared here purely so that
+  # `docker compose --profile build-only build bot` rebuilds the image used by
+  # `BOT_IMAGE`. The `build-only` profile keeps it out of the default
+  # `docker compose up` set.
+  bot:
+    image: cogent42-team/bot:latest
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    profiles: ["build-only"]
