@@ -16,6 +16,7 @@ import { usersRoutes } from "./routes/users.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
 import { gmailRoutes } from "./routes/gmail.js";
 import { auditRoutes } from "./routes/audit.js";
+import { meRoutes, meApiRoutes } from "./routes/me.js";
 import { requireAdmin } from "./lib/auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,11 @@ await app.register(infoRoutes, { prefix: "/api/info" });
 
 // Gmail OAuth callback is public (Google redirects user-agent here)
 await app.register(gmailRoutes, { prefix: "/api/gmail" });
+
+// /me dashboard — login redemption + dashboard HTML + per-user API.
+// Both halves enforce the magic-link → session cookie flow (see routes/me.js).
+await app.register(meRoutes,    { prefix: "/me" });
+await app.register(meApiRoutes, { prefix: "/api/me" });
 
 // Everything else is admin-only
 app.register(async (admin) => {

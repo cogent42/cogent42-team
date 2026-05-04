@@ -4,11 +4,21 @@
 //   /private ID — flip a fact's ACL to private
 //   /recent     — last 10 extracted facts for this user
 //   /gmail      — DM the owner a Google OAuth consent URL to connect their Gmail
+//   /me         — DM the owner a 10-min single-use link to the web dashboard
 
+import { randomBytes, createHash } from "node:crypto";
 import { pool, audit } from "@cogent42-team/db";
 import { flushSession } from "./session.js";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+
+// Magic links are short-lived on purpose so a leaked Telegram message (or
+// shoulder-glance) is a small attack window.
+const MAGIC_LINK_TTL_MS = 10 * 60 * 1000;
+
+function sha256Hex(s) {
+  return createHash("sha256").update(s).digest("hex");
+}
 
 // We construct the Google OAuth consent URL ourselves rather than pulling in the
 // googleapis SDK just for this — only the client_id and redirect_uri are needed
@@ -86,6 +96,32 @@ export async function handleSlashCommand({ userId, command }) {
       return `Marked private:\n` + rows.map((r) => `- ${r.fact}`).join("\n");
     }
 
+    case "/me": {
+      const baseUrl = process.env.CONTROL_PLANE_PUBLIC_URL;
+      if (!baseUrl) {
+        return "The web dashboard isn't configured on this deployment yet — ask your admin to set CONTROL_PLANE_PUBLIC_URL on the control-plane.";
+      }
+      // 32 bytes = 256 bits; URL-safe base64 → 43 chars.
+      const raw = randomBytes(32).toString("base64url");
+      const expires = new Date(Date.now() + MAGIC_LINK_TTL_MS);
+      await pool.query(
+        `INSERT INTO user_sessions (user_id, token_hash, kind, expires_at)
+         VALUES ($1, $2, 'magic_link', $3)`,
+        [userId, sha256Hex(raw), expires]
+      );
+      await audit({
+        actorUserId: userId, actorRole: "bot", action: "me.magic_link_minted",
+        targetType: "user", targetId: userId,
+      });
+      const url = `${baseUrl.replace(/\/+$/, "")}/me/login?t=${raw}`;
+      return [
+        "Open your dashboard:",
+        url,
+        "",
+        "This link expires in 10 minutes and works once. The browser session it issues also expires after 10 minutes — run /me again any time.",
+      ].join("\n");
+    }
+
     case "/gmail": {
       const clientId    = process.env.GOOGLE_CLIENT_ID;
       const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
@@ -108,6 +144,7 @@ export async function handleSlashCommand({ userId, command }) {
 
     case "/help":
       return [
+        "/me — open your web dashboard (10-min single-use link)",
         "/done — flush current session for knowledge extraction",
         "/recent — last 10 extracted facts",
         "/forget <text> — delete facts matching text",

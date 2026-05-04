@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>cogent42-team · my dashboard</title>
+<style>
+  :root { --bg:#0b0d10; --fg:#e6e6e6; --muted:#8a8f98; --accent:#7aa2f7; --card:#14171c; --line:#262a31; --warn:#e0af68; --bad:#f7768e; --good:#9ece6a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.5 -apple-system, system-ui, Segoe UI, Inter, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size: 16px; margin:0; font-weight:600; letter-spacing:0.2px; }
+  header h1 span { color: var(--accent); }
+  .who { color: var(--muted); font-size: 13px; }
+  .who b { color: var(--fg); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 22px 60px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 720px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+  .stat { padding: 10px 12px; background: rgba(255,255,255,0.025); border-radius: 8px; }
+  .stat .n { font-size: 22px; font-weight: 600; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { padding: 8px 10px; text-align:left; border-bottom: 1px solid var(--line); font-size:13px; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td.fact { max-width: 540px; }
+  button, input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 6px 9px; border-radius: 6px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
+  button.ghost { color: var(--muted); background: transparent; }
+  .row { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+  .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size:11px; background: var(--line); color: var(--muted); }
+  .pill.team { background: #1f3a4a; color: #7dcfff; }
+  .pill.private { background: #3a1f2a; color: #f7768e; }
+  .pill.gmail { background: #2a1f3a; color: #bb9af7; }
+  .pill.chat { background: #1f3a2a; color: #9ece6a; }
+  .pill.ok { background: #1f3a2a; color: #9ece6a; }
+  .pill.warn { background: #3a2f1f; color: #e0af68; }
+  .muted { color: var(--muted); }
+  label.field { display:block; margin-bottom: 10px; }
+  label.field .l { font-size: 12px; color: var(--muted); margin-bottom: 4px; display: block; }
+  label.field input, label.field select { width: 100%; }
+  .filter-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; }
+  @media (max-width: 720px) { .filter-row { grid-template-columns: 1fr 1fr; } }
+  .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 14px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--fg); opacity: 0; transform: translateY(8px); transition: 0.18s; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>cogent42<span>·team</span></h1>
+  <div class="row">
+    <span class="who"><b id="who-name">…</b><span id="who-email" class="muted"></span></span>
+    <button id="logout" class="ghost">Sign out</button>
+  </div>
+</header>
+
+<main>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Your knowledge</h3>
+      <div class="stat-grid">
+        <div class="stat"><div class="n" id="s-total">–</div><div class="l">Total saved</div></div>
+        <div class="stat"><div class="n" id="s-team">–</div><div class="l">Shared with team</div></div>
+        <div class="stat"><div class="n" id="s-private">–</div><div class="l">Private to you</div></div>
+        <div class="stat"><div class="n" id="s-7d">–</div><div class="l">Added in 7d</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Settings</h3>
+      <label class="field">
+        <span class="l">Gmail mode</span>
+        <select id="gmail-mode">
+          <option value="disabled">disabled — no Gmail ingestion</option>
+          <option value="sent_only">sent_only — only your sent messages</option>
+          <option value="sent_plus_threads">sent_plus_threads (default) — sent + threads you replied in</option>
+          <option value="labeled_only">labeled_only — only specific labels</option>
+          <option value="full_inbox">full_inbox — opt in widening</option>
+        </select>
+      </label>
+      <label class="field row" style="gap: 10px; align-items: center;">
+        <input id="share-to-team" type="checkbox" style="width: 18px; height: 18px;" />
+        <span>Share extracted facts with team (off keeps everything private)</span>
+      </label>
+      <div class="row" style="margin-top: 12px;">
+        <span id="gmail-status" class="pill warn">Gmail: not connected</span>
+        <button class="primary" id="settings-save">Save settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Your saved facts</h3>
+    <div class="filter-row">
+      <input id="f-q" placeholder="search facts" />
+      <select id="f-category">
+        <option value="">all categories</option>
+        <option value="server">server</option>
+        <option value="project">project</option>
+        <option value="preference">preference</option>
+        <option value="decision">decision</option>
+        <option value="bug">bug</option>
+        <option value="config">config</option>
+        <option value="rule">rule</option>
+        <option value="workflow">workflow</option>
+        <option value="mistake">mistake</option>
+        <option value="personal">personal</option>
+      </select>
+      <select id="f-source">
+        <option value="">all sources</option>
+        <option value="chat">chat</option>
+        <option value="gmail">gmail</option>
+        <option value="manual">manual</option>
+        <option value="imported">imported</option>
+      </select>
+      <select id="f-acl">
+        <option value="">all visibility</option>
+        <option value="team">team</option>
+        <option value="private">private</option>
+      </select>
+      <button id="f-search">Filter</button>
+    </div>
+    <div id="facts" style="margin-top: 14px;">Loading…</div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const CATEGORIES = ["server","project","preference","decision","bug","config","rule","workflow","mistake","personal"];
+
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+function toast(msg) {
+  const el = $("#toast"); el.textContent = msg; el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2000);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    credentials: "same-origin",
+    headers: { "Content-Type":"application/json", ...(opts.headers || {}) },
+  });
+  if (res.status === 401) { location.href = "/"; throw new Error("session expired"); }
+  if (!res.ok) throw new Error(await res.text());
+  return res.headers.get("content-type")?.includes("json") ? res.json() : res.text();
+}
+
+async function loadMe() {
+  const { user } = await api("/api/me");
+  $("#who-name").textContent = user.name;
+  $("#who-email").textContent = " · " + user.email;
+  $("#s-total").textContent = user.facts_total;
+  $("#s-team").textContent = user.facts_team;
+  $("#s-private").textContent = user.facts_private;
+  $("#s-7d").textContent = user.facts_last_7d;
+  $("#gmail-mode").value = user.gmail_mode;
+  $("#share-to-team").checked = !!user.share_to_team;
+  if (user.gmail_connected) {
+    $("#gmail-status").textContent = "Gmail: connected";
+    $("#gmail-status").className = "pill ok";
+  } else {
+    $("#gmail-status").textContent = "Gmail: not connected — DM your bot /gmail";
+    $("#gmail-status").className = "pill warn";
+  }
+}
+
+async function loadFacts() {
+  const params = new URLSearchParams();
+  const q = $("#f-q").value.trim(); if (q) params.set("q", q);
+  const c = $("#f-category").value; if (c) params.set("category", c);
+  const s = $("#f-source").value; if (s) params.set("source", s);
+  const a = $("#f-acl").value; if (a) params.set("acl", a);
+  const { entries } = await api("/api/me/facts?" + params);
+  if (entries.length === 0) {
+    $("#facts").innerHTML = '<p class="muted">No facts match your filters. DM your bot anything — saved facts will appear here.</p>';
+    return;
+  }
+  $("#facts").innerHTML = `<table><thead><tr>
+    <th>Fact</th><th>Category</th><th>Visibility</th><th>Source</th><th>Saved</th><th></th>
+  </tr></thead><tbody>${entries.map(e => `
+    <tr data-id="${e.id}">
+      <td class="fact">${escapeHtml(e.fact)}</td>
+      <td>
+        <select class="cell-category">
+          ${CATEGORIES.map(c => `<option value="${c}"${c===e.category?" selected":""}>${c}</option>`).join("")}
+        </select>
+      </td>
+      <td>
+        <select class="cell-acl">
+          <option value="team"${e.acl==='team'?' selected':''}>team</option>
+          <option value="private"${e.acl==='private'?' selected':''}>private</option>
+        </select>
+      </td>
+      <td><span class="pill ${e.source}">${e.source}</span></td>
+      <td class="muted">${new Date(e.created_at).toLocaleDateString()}</td>
+      <td><button class="danger cell-delete">Delete</button></td>
+    </tr>`).join("")}</tbody></table>`;
+
+  document.querySelectorAll("#facts tr[data-id]").forEach(row => {
+    const id = row.dataset.id;
+    row.querySelector(".cell-category").addEventListener("change", e => updateFact(id, { category: e.target.value }));
+    row.querySelector(".cell-acl").addEventListener("change",      e => updateFact(id, { acl: e.target.value }));
+    row.querySelector(".cell-delete").addEventListener("click", () => deleteFact(id, row));
+  });
+}
+
+async function updateFact(id, patch) {
+  try { await api(`/api/me/facts/${id}`, { method: "PATCH", body: JSON.stringify(patch) }); toast("Saved"); }
+  catch (e) { toast("Failed: " + e.message); loadFacts(); }
+}
+
+async function deleteFact(id, row) {
+  if (!confirm("Delete this saved fact? This is a soft-delete — your admin can still see it in the audit log.")) return;
+  try {
+    await api(`/api/me/facts/${id}`, { method: "DELETE" });
+    row.remove();
+    loadMe();
+    toast("Deleted");
+  } catch (e) { toast("Failed: " + e.message); }
+}
+
+$("#settings-save").addEventListener("click", async () => {
+  const body = { gmail_mode: $("#gmail-mode").value, share_to_team: $("#share-to-team").checked };
+  try { await api("/api/me", { method: "PATCH", body: JSON.stringify(body) }); toast("Saved"); }
+  catch (e) { toast("Failed: " + e.message); }
+});
+
+$("#f-search").addEventListener("click", loadFacts);
+$("#f-q").addEventListener("keydown", e => { if (e.key === "Enter") loadFacts(); });
+
+$("#logout").addEventListener("click", async () => {
+  await api("/me/logout", { method: "POST" }).catch(() => {});
+  location.href = "/";
+});
+
+loadMe().catch(e => { if (e.message !== "session expired") alert(e.message); });
+loadFacts().catch(e => { if (e.message !== "session expired") alert(e.message); });
+</script>
+</body>
+</html>

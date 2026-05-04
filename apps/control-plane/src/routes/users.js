@@ -64,6 +64,9 @@ export async function usersRoutes(app) {
           // intentionally NOT forwarded — token exchange happens on the callback.
           GOOGLE_CLIENT_ID:          process.env.GOOGLE_CLIENT_ID || "",
           GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || "",
+          // Bot uses this to mint /me magic-link URLs that point back at the
+          // public-facing control-plane.
+          CONTROL_PLANE_PUBLIC_URL:  process.env.CONTROL_PLANE_PUBLIC_URL || "",
         },
       });
     } catch (err) {
@@ -152,6 +155,7 @@ export async function usersRoutes(app) {
         OPENAI_API_KEY:            process.env.OPENAI_API_KEY,
         GOOGLE_CLIENT_ID:          process.env.GOOGLE_CLIENT_ID || "",
         GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || "",
+        CONTROL_PLANE_PUBLIC_URL:  process.env.CONTROL_PLANE_PUBLIC_URL || "",
       },
     });
 
