@@ -1,6 +1,9 @@
 // Drains extraction_jobs queue. One worker serves all users.
 // Pg-as-queue: SELECT … FOR UPDATE SKIP LOCKED.
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
+
 import { pool, audit } from "@cogent42-team/db";
 import { extractFromChat, extractFromGmail } from "./extract.js";
 import { writeFacts } from "./write.js";
@@ -43,9 +46,25 @@ async function failJob(id, err) {
   );
 }
 
+/**
+ * For gmail jobs that carried attachments, every file lives under one
+ * per-message directory written by the gmail-worker. Returns that dir or null.
+ * Cleanup runs in finally so we delete the staged files whether extraction
+ * succeeded or failed (otherwise large PDFs leak forever on the shared volume).
+ */
+function attachmentDirForJob(job) {
+  if (job.source !== "gmail") return null;
+  const atts = job.payload?.attachments;
+  if (!Array.isArray(atts) || atts.length === 0) return null;
+  const first = atts.find((a) => a && a.path);
+  return first ? path.dirname(first.path) : null;
+}
+
 async function runOne() {
   const job = await leaseJob();
   if (!job) return false;
+
+  const attachmentDir = attachmentDirForJob(job);
 
   try {
     let facts = [];
@@ -57,7 +76,12 @@ async function runOne() {
       await audit({
         actorUserId: job.user_id, actorRole: "extractor", action: "extract",
         targetType: "user", targetId: job.user_id,
-        payload: { source: job.source, ref: job.source_ref, written: written.length },
+        payload: {
+          source:      job.source,
+          ref:         job.source_ref,
+          written:     written.length,
+          attachments: job.payload?.attachments?.length || 0,
+        },
       });
     }
     await completeJob(job.id);
@@ -65,6 +89,12 @@ async function runOne() {
   } catch (err) {
     console.error(`[extractor] job ${job.id} failed:`, err.message);
     await failJob(job.id, err);
+  } finally {
+    if (attachmentDir) {
+      await fs.rm(attachmentDir, { recursive: true, force: true }).catch((e) =>
+        console.error(`[extractor] cleanup ${attachmentDir} failed:`, e.message)
+      );
+    }
   }
   return true;
 }

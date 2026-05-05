@@ -9,7 +9,10 @@
   "dependencies": {
     "@cogent42-team/db": "*",
     "@cogent42-team/shared": "*",
+    "exceljs": "^4.4.0",
     "googleapis": "^144.0.0",
-    "pg": "^8.13.1"
+    "mammoth": "^1.8.0",
+    "pg": "^8.13.1",
+    "word-extractor": "^1.0.4"
   }
 }
