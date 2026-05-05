@@ -18,7 +18,8 @@
     "build:all": "npm run build:bot && npm run build:control-plane && npm run build:extractor && npm run build:gmail",
     "up": "docker compose up -d",
     "down": "docker compose down",
-    "logs": "docker compose logs -f"
+    "logs": "docker compose logs -f",
+    "deploy": "./scripts/deploy.sh"
   },
   "engines": {
     "node": ">=20.0.0"

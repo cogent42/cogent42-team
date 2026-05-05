@@ -194,6 +194,19 @@ The control-plane:
 
 Total elapsed: ~3 seconds. The user can immediately DM their bot.
 
+### Deploying updates
+
+After the initial setup, push a PR to GitHub, merge it, then from your local checkout:
+
+```bash
+cp deploy.env.example deploy.env   # one-time, fill in your server's details
+npm run deploy
+```
+
+`scripts/deploy.sh` SSHs to the server, fast-forwards `master`, applies any new migrations, and rebuilds + recreates only the services whose code (or transitively their shared packages) changed since the last deploy. If `apps/bot/` or a shared package changed, it also rebuilds the bot image and restarts each provisioned user bot via the admin API. No-op if there's nothing new on master.
+
+`deploy.env` is gitignored. Every value can also come from real environment variables, so the same script works in CI.
+
 ### Connecting Gmail (per user)
 
 1. In the Google Cloud Console, create OAuth credentials with the redirect URI pointing to your control-plane's `/api/gmail/oauth/callback`.
