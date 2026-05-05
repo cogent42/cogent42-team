@@ -5,9 +5,32 @@
 //   'labeled_only'      — only messages with a specific user-applied label
 //   'full_inbox'        — opt-in widening (still excludes drafts/chats)
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
+
 import { google } from "googleapis";
 import { pool } from "@cogent42-team/db";
 import { decryptString, encryptString } from "@cogent42-team/shared/crypto";
+
+// Where downloaded PDF/image attachments are staged. Same path is bind-mounted
+// into the extractor-worker via a named volume in docker-compose so the
+// extractor can Read-tool them. Per-message subdirs let us delete cleanly after
+// extraction.
+const ATTACHMENT_ROOT = "/var/lib/cogent42-attachments";
+
+// Conservative allowlist on first cut — PDFs (Read tool reads natively) and
+// images (Read uses vision). Everything else (.docx, .xlsx, .zip, archives)
+// silently skipped: handling them needs a conversion step we don't have yet.
+const ALLOWED_ATTACHMENT_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
+const MAX_ATTACHMENT_BYTES     = 5 * 1024 * 1024;   // bigger PDFs blow up extraction cost
+const MAX_ATTACHMENTS_PER_MSG  = 3;                 // cap blast radius on a noisy email
 
 function makeOAuthClient() {
   return new google.auth.OAuth2(
@@ -78,6 +101,69 @@ function header(headers, name) {
   return h ? h.value : "";
 }
 
+/**
+ * Walk the MIME tree looking for attached files (NOT inline body parts). Gmail
+ * sets `body.attachmentId` on parts whose contents have to be fetched separately
+ * via users.messages.attachments.get; that's our signal an attachment exists.
+ */
+function walkAttachments(payload) {
+  const found = [];
+  const walk = (p) => {
+    if (!p) return;
+    if (p.parts) p.parts.forEach(walk);
+    if (p.body && p.body.attachmentId && p.mimeType && p.filename) {
+      found.push({
+        attachmentId: p.body.attachmentId,
+        mime:         p.mimeType,
+        filename:     p.filename,
+        size:         p.body.size || 0,
+      });
+    }
+  };
+  walk(payload);
+  return found;
+}
+
+function safeFilename(name) {
+  return (name || "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "attachment";
+}
+
+/**
+ * Filter to allowed mime + size, cap count, download each, return [{path, mime, name}].
+ * Failures on individual attachments are logged and skipped — we don't fail the whole
+ * message just because one PDF fetch errored.
+ */
+async function downloadAttachments({ gmail, messageId, raw }) {
+  const accepted = raw
+    .filter((a) => ALLOWED_ATTACHMENT_MIMES.has(a.mime))
+    .filter((a) => a.size > 0 && a.size <= MAX_ATTACHMENT_BYTES)
+    .slice(0, MAX_ATTACHMENTS_PER_MSG);
+  if (accepted.length === 0) return [];
+
+  const dir = path.join(ATTACHMENT_ROOT, messageId);
+  await fs.mkdir(dir, { recursive: true });
+
+  const out = [];
+  for (const a of accepted) {
+    try {
+      const res = await gmail.users.messages.attachments.get({
+        userId: "me", messageId, id: a.attachmentId,
+      });
+      const data = res.data?.data;
+      if (!data) continue;
+      // Gmail returns url-safe base64. Buffer.from accepts "base64" but the URL
+      // alphabet (uses `-` and `_`) needs the explicit "base64url" encoding.
+      const buf = Buffer.from(data, "base64url");
+      const filePath = path.join(dir, safeFilename(a.filename));
+      await fs.writeFile(filePath, buf);
+      out.push({ path: filePath, mime: a.mime, name: a.filename, bytes: buf.length });
+    } catch (err) {
+      console.error(`[gmail] attachment download failed for ${messageId}/${a.filename}:`, err.message);
+    }
+  }
+  return out;
+}
+
 export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
   const auth = await getAuthedClientForUser(userId);
   const gmail = google.gmail({ version: "v1", auth });
@@ -101,6 +187,9 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
     const msg = await gmail.users.messages.get({ userId: "me", id, format: "full" });
     const m = msg.data;
     seenIds.add(m.id);
+    const attachments = await downloadAttachments({
+      gmail, messageId: m.id, raw: walkAttachments(m.payload),
+    });
     out.push({
       id: m.id,
       threadId: m.threadId,
@@ -109,6 +198,7 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
       to: header(m.payload.headers, "To"),
       date: header(m.payload.headers, "Date"),
       body: decodeBody(m.payload),
+      attachments,
     });
 
     if (expandThreads && m.threadId) {
@@ -116,6 +206,9 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
       for (const tm of thread.data.messages || []) {
         if (seenIds.has(tm.id)) continue;
         seenIds.add(tm.id);
+        const tAttachments = await downloadAttachments({
+          gmail, messageId: tm.id, raw: walkAttachments(tm.payload),
+        });
         out.push({
           id: tm.id,
           threadId: tm.threadId,
@@ -124,6 +217,7 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
           to: header(tm.payload.headers, "To"),
           date: header(tm.payload.headers, "Date"),
           body: decodeBody(tm.payload),
+          attachments: tAttachments,
         });
       }
     }

@@ -11,6 +11,11 @@ networks:
 
 volumes:
   pgdata:
+  # gmail-worker downloads PDF/image attachments here; extractor-worker reads
+  # them via Claude Code's Read tool, then deletes the per-message subdir on
+  # job completion. Named volume keeps the path consistent across both
+  # services without relying on a host-side bind path.
+  attachments:
 
 services:
   postgres:
@@ -79,6 +84,8 @@ services:
     volumes:
       # Share the host's Claude Code session — the SDK spawns the `claude` CLI which reads creds from here.
       - ${CLAUDE_CODE_HOME}:/root/.claude
+      # Shared with gmail-worker: PDF/image attachments staged for Read-tool extraction.
+      - attachments:/var/lib/cogent42-attachments
     networks: [cogent42-internal]
 
   gmail-worker:
@@ -97,6 +104,9 @@ services:
       GOOGLE_CLIENT_SECRET:       ${GOOGLE_CLIENT_SECRET}
       GOOGLE_OAUTH_REDIRECT_URI:  ${GOOGLE_OAUTH_REDIRECT_URI}
       GMAIL_POLL_INTERVAL_SEC:    ${GMAIL_POLL_INTERVAL_SEC}
+    volumes:
+      # Where downloaded PDF/image attachments are staged before extraction.
+      - attachments:/var/lib/cogent42-attachments
     networks: [cogent42-internal]
 
   # The bot image is run per-user by the control-plane (provisioned via the
