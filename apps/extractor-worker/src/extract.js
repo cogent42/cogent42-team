@@ -114,11 +114,13 @@ export async function extractFromGmail(job) {
     return runExtraction(base);
   }
 
-  // Tell Claude where each file lives + what type it is. Read handles PDFs and
-  // images natively (vision); we don't need a separate conversion step. Each
-  // fact extracted from an attachment is treated as coming from this email —
-  // same source attribution as the body, since the user chose to send the
-  // attachment as part of this email.
+  // Tell Claude where each file lives + what type it is. PDFs and images are
+  // read natively by Read (vision). Office docs (.docx/.xlsx/.doc) get
+  // converted to text/CSV upstream by gmail-worker — the path here points at
+  // the converted file, with the original filename in the name field for
+  // attribution. Each fact extracted from an attachment is treated as coming
+  // from this email — same source attribution as the body, since the user
+  // chose to send the attachment as part of this email.
   const attachmentBlock = validAttachments
     .map((a) => `  - ${a.path}  (${a.mime}${a.name ? `, "${a.name}"` : ""})`)
     .join("\n");

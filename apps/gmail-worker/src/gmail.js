@@ -9,28 +9,35 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { google } from "googleapis";
+import mammoth from "mammoth";
+import ExcelJS from "exceljs";
+import WordExtractor from "word-extractor";
+
 import { pool } from "@cogent42-team/db";
 import { decryptString, encryptString } from "@cogent42-team/shared/crypto";
 
-// Where downloaded PDF/image attachments are staged. Same path is bind-mounted
-// into the extractor-worker via a named volume in docker-compose so the
-// extractor can Read-tool them. Per-message subdirs let us delete cleanly after
-// extraction.
+// Where downloaded attachments are staged. Same path is bind-mounted into the
+// extractor-worker via a named volume in docker-compose so the extractor can
+// Read-tool them. Per-message subdirs let us delete cleanly after extraction.
 const ATTACHMENT_ROOT = "/var/lib/cogent42-attachments";
 
-// Conservative allowlist on first cut — PDFs (Read tool reads natively) and
-// images (Read uses vision). Everything else (.docx, .xlsx, .zip, archives)
-// silently skipped: handling them needs a conversion step we don't have yet.
+// Allowlist by MIME. Office formats (.docx/.xlsx/.doc) get converted to text
+// at download time so the extractor's Read tool — which natively handles PDFs
+// (vision), images (vision), and plain text/CSV — has something it can open.
+// Everything outside this list is silently skipped on first cut (.zip, .xls
+// legacy BIFF, .pptx, etc.).
 const ALLOWED_ATTACHMENT_MIMES = new Set([
   "application/pdf",
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/gif",
-  "image/webp",
+  "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",   // .docx
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         // .xlsx
+  "application/msword",                                                         // .doc (legacy Word97)
 ]);
-const MAX_ATTACHMENT_BYTES     = 5 * 1024 * 1024;   // bigger PDFs blow up extraction cost
-const MAX_ATTACHMENTS_PER_MSG  = 3;                 // cap blast radius on a noisy email
+// Belt-and-braces for files Gmail labels as octet-stream — fall back to extension.
+const ALLOWED_EXT_RE = /\.(pdf|jpe?g|png|gif|webp|docx?|xlsx)$/i;
+
+const MAX_ATTACHMENT_BYTES    = 50 * 1024 * 1024;   // 50 MB per file
+const MAX_ATTACHMENTS_PER_MSG = 3;                  // cap blast radius on a noisy email
 
 function makeOAuthClient() {
   return new google.auth.OAuth2(
@@ -128,14 +135,84 @@ function safeFilename(name) {
   return (name || "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "attachment";
 }
 
+function isAttachmentAllowed(a) {
+  if (ALLOWED_ATTACHMENT_MIMES.has(a.mime)) return true;
+  return ALLOWED_EXT_RE.test(a.filename || "");
+}
+
+function escapeCsv(v) {
+  if (v == null) return "";
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 /**
- * Filter to allowed mime + size, cap count, download each, return [{path, mime, name}].
- * Failures on individual attachments are logged and skipped — we don't fail the whole
- * message just because one PDF fetch errored.
+ * Office formats (.docx/.xlsx/.doc) need a conversion step before the extractor
+ * can read them — Claude Code's Read tool handles PDFs and images natively but
+ * not Office binary/zip formats. We convert at download time, write the
+ * converted text next to the original, and point the extractor at the converted
+ * file. Returns null for formats Read can open directly (PDF, image, plain).
+ */
+async function convertOfficeAttachment(filePath, mime, filename) {
+  const lower = (filename || "").toLowerCase();
+
+  if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      || lower.endsWith(".docx")) {
+    const { value } = await mammoth.extractRawText({ path: filePath });
+    return { content: value, suffix: ".txt", convertedMime: "text/plain", kind: "docx→text" };
+  }
+
+  if (mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      || lower.endsWith(".xlsx")) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(filePath);
+    const out = [];
+    wb.eachSheet((sheet) => {
+      out.push(`### Sheet: ${sheet.name}`);
+      sheet.eachRow({ includeEmpty: false }, (row) => {
+        const cells = [];
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          let v = cell.value;
+          // Unwrap rich-text / formula / date wrappers.
+          if (v && typeof v === "object") {
+            if (v.text)               v = v.text;
+            else if (v.result != null) v = v.result;
+            else if (v.richText)      v = v.richText.map((r) => r.text).join("");
+            else if (v instanceof Date) v = v.toISOString();
+          }
+          cells.push(escapeCsv(v));
+        });
+        out.push(cells.join(","));
+      });
+      out.push("");
+    });
+    return { content: out.join("\n"), suffix: ".csv", convertedMime: "text/csv", kind: "xlsx→csv" };
+  }
+
+  if (mime === "application/msword" || lower.endsWith(".doc")) {
+    const extractor = new WordExtractor();
+    const doc = await extractor.extract(filePath);
+    return {
+      content: [doc.getBody(), doc.getFootnotes(), doc.getEndnotes()].filter(Boolean).join("\n\n"),
+      suffix: ".txt",
+      convertedMime: "text/plain",
+      kind: "doc→text",
+    };
+  }
+
+  return null; // PDFs and images go straight to Read.
+}
+
+/**
+ * Filter to allowed mime/extension + size, cap count, download each, convert
+ * Office formats to text in-place, return [{path, mime, name, bytes}] pointing
+ * at whatever the extractor should Read. Failures on individual attachments
+ * are logged and skipped — we don't fail the whole message just because one
+ * PDF fetch errored or one .doc was malformed.
  */
 async function downloadAttachments({ gmail, messageId, raw }) {
   const accepted = raw
-    .filter((a) => ALLOWED_ATTACHMENT_MIMES.has(a.mime))
+    .filter(isAttachmentAllowed)
     .filter((a) => a.size > 0 && a.size <= MAX_ATTACHMENT_BYTES)
     .slice(0, MAX_ATTACHMENTS_PER_MSG);
   if (accepted.length === 0) return [];
@@ -145,6 +222,7 @@ async function downloadAttachments({ gmail, messageId, raw }) {
 
   const out = [];
   for (const a of accepted) {
+    let originalPath;
     try {
       const res = await gmail.users.messages.attachments.get({
         userId: "me", messageId, id: a.attachmentId,
@@ -154,11 +232,40 @@ async function downloadAttachments({ gmail, messageId, raw }) {
       // Gmail returns url-safe base64. Buffer.from accepts "base64" but the URL
       // alphabet (uses `-` and `_`) needs the explicit "base64url" encoding.
       const buf = Buffer.from(data, "base64url");
-      const filePath = path.join(dir, safeFilename(a.filename));
-      await fs.writeFile(filePath, buf);
-      out.push({ path: filePath, mime: a.mime, name: a.filename, bytes: buf.length });
+      originalPath = path.join(dir, safeFilename(a.filename));
+      await fs.writeFile(originalPath, buf);
     } catch (err) {
       console.error(`[gmail] attachment download failed for ${messageId}/${a.filename}:`, err.message);
+      continue;
+    }
+
+    // Convert Office docs to text/CSV. PDFs and images don't need this — return null.
+    let conv = null;
+    try {
+      conv = await convertOfficeAttachment(originalPath, a.mime, a.filename);
+    } catch (err) {
+      console.error(`[gmail] convert ${a.filename} failed:`, err.message);
+      // Skip the attachment entirely if its conversion failed — we can't read it.
+      continue;
+    }
+
+    if (conv) {
+      const convPath = `${originalPath}${conv.suffix}`;
+      await fs.writeFile(convPath, conv.content || "");
+      out.push({
+        path: convPath,
+        mime: conv.convertedMime,
+        name: `${a.filename} (${conv.kind})`,
+        bytes: Buffer.byteLength(conv.content || ""),
+      });
+    } else {
+      const stat = await fs.stat(originalPath).catch(() => null);
+      out.push({
+        path: originalPath,
+        mime: a.mime,
+        name: a.filename,
+        bytes: stat?.size || 0,
+      });
     }
   }
   return out;
