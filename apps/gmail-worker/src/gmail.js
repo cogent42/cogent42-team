@@ -271,17 +271,25 @@ async function downloadAttachments({ gmail, messageId, raw }) {
   return out;
 }
 
-export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
+/**
+ * `isAlreadyProcessed(messageId) → bool` lets the caller skip Gmail's expensive
+ * `messages.get` + per-attachment download for messages we've already enqueued.
+ * Without it, every tick fetches the full payload AND re-downloads every
+ * attachment for every message in the backfill window — and the leftover
+ * attachment files leak because the dedup check happens at the index.js layer
+ * AFTER the download already finished.
+ */
+export async function fetchSentMessages({ userId, mode, labelId, max = 25, isAlreadyProcessed }) {
   const auth = await getAuthedClientForUser(userId);
   const gmail = google.gmail({ version: "v1", auth });
 
   const { q, labelIds, expandThreads } = buildQuery(mode, labelId);
 
   // Recent sent messages — capped at `max`. The newer_than window is the
-  // first-tick backfill bound; subsequent ticks dedup against existing
-  // extraction_jobs rows so re-fetches inside the window are cheap (only
-  // messages.list returns IDs; messages.get is skipped for ones already
-  // enqueued). Tunable via GMAIL_BACKFILL_DAYS env, default 30 days.
+  // first-tick backfill bound; subsequent ticks dedup at the message-id level
+  // BEFORE expensive messages.get + attachment downloads, so re-runs inside
+  // the window cost only the cheap messages.list call. Tunable via
+  // GMAIL_BACKFILL_DAYS env, default 30 days.
   const backfillDays = parseInt(process.env.GMAIL_BACKFILL_DAYS || "30", 10);
   const list = await gmail.users.messages.list({
     userId: "me",
@@ -294,8 +302,12 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
   const out = [];
   const seenIds = new Set();
 
+  const skip = isAlreadyProcessed || (async () => false);
+
   for (const id of messageIds) {
     if (seenIds.has(id)) continue;
+    if (await skip(id)) { seenIds.add(id); continue; }
+
     const msg = await gmail.users.messages.get({ userId: "me", id, format: "full" });
     const m = msg.data;
     seenIds.add(m.id);
@@ -317,6 +329,7 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
       const thread = await gmail.users.threads.get({ userId: "me", id: m.threadId, format: "full" });
       for (const tm of thread.data.messages || []) {
         if (seenIds.has(tm.id)) continue;
+        if (await skip(tm.id)) { seenIds.add(tm.id); continue; }
         seenIds.add(tm.id);
         const tAttachments = await downloadAttachments({
           gmail, messageId: tm.id, raw: walkAttachments(tm.payload),

@@ -23,6 +23,21 @@ async function listConnectedUsers() {
 }
 
 async function processUser(user) {
+  // Dedup at the message-id layer BEFORE messages.get + attachment download,
+  // so re-runs inside the backfill window are cheap and don't re-create the
+  // attachment dir on disk for already-processed messages. We can't dedup on
+  // knowledge_entries alone — extraction can legitimately return 0 facts
+  // (no row), and we'd otherwise re-enqueue every tick.
+  const isAlreadyProcessed = async (messageId) => {
+    const r = await pool.query(
+      `SELECT 1 FROM extraction_jobs
+        WHERE user_id = $1 AND source = 'gmail' AND source_ref = $2
+        LIMIT 1`,
+      [user.id, messageId]
+    );
+    return r.rows.length > 0;
+  };
+
   let messages;
   try {
     messages = await fetchSentMessages({
@@ -30,6 +45,7 @@ async function processUser(user) {
       mode: user.gmail_mode,
       labelId: user.gmail_label_id,
       max: MAX_PER_USER_PER_TICK,
+      isAlreadyProcessed,
     });
   } catch (err) {
     console.error(`[gmail] ${user.email} fetch failed:`, err.message);
@@ -38,9 +54,8 @@ async function processUser(user) {
 
   let enqueued = 0;
   for (const m of messages) {
-    // Idempotency: skip if any extraction_jobs row exists for this (user, gmail msg id),
-    // regardless of status. We can't dedup on knowledge_entries alone — extraction can
-    // legitimately return 0 facts (no row), and we'd otherwise re-enqueue every tick.
+    // Defence-in-depth — fetchSentMessages already skipped processed IDs but a
+    // race (parallel processUser calls for the same user) could still race us.
     const existing = await pool.query(
       `SELECT 1 FROM extraction_jobs
         WHERE user_id = $1 AND source = 'gmail' AND source_ref = $2
