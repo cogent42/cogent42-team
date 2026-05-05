@@ -104,6 +104,7 @@ services:
       GOOGLE_CLIENT_SECRET:       ${GOOGLE_CLIENT_SECRET}
       GOOGLE_OAUTH_REDIRECT_URI:  ${GOOGLE_OAUTH_REDIRECT_URI}
       GMAIL_POLL_INTERVAL_SEC:    ${GMAIL_POLL_INTERVAL_SEC}
+      GMAIL_BACKFILL_DAYS:        ${GMAIL_BACKFILL_DAYS:-30}
     volumes:
       # Where downloaded PDF/image attachments are staged before extraction.
       - attachments:/var/lib/cogent42-attachments

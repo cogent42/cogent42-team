@@ -277,10 +277,15 @@ export async function fetchSentMessages({ userId, mode, labelId, max = 25 }) {
 
   const { q, labelIds, expandThreads } = buildQuery(mode, labelId);
 
-  // Recent sent messages — capped at `max`.
+  // Recent sent messages — capped at `max`. The newer_than window is the
+  // first-tick backfill bound; subsequent ticks dedup against existing
+  // extraction_jobs rows so re-fetches inside the window are cheap (only
+  // messages.list returns IDs; messages.get is skipped for ones already
+  // enqueued). Tunable via GMAIL_BACKFILL_DAYS env, default 30 days.
+  const backfillDays = parseInt(process.env.GMAIL_BACKFILL_DAYS || "30", 10);
   const list = await gmail.users.messages.list({
     userId: "me",
-    q: q + " newer_than:7d",                  // bounded backfill on first tick; subsequent ticks rely on dedup
+    q: `${q} newer_than:${backfillDays}d`,
     labelIds: labelIds.length ? labelIds : undefined,
     maxResults: max,
   });
