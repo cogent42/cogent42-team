@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>cogent42-team — self-hosted team brain</title>
+  <meta name="description" content="One Telegram agent per teammate. Postgres-backed shared knowledge with per-fact ACLs. Gmail-aware. Built on the Claude Agent SDK." />
+  <meta property="og:title" content="cogent42-team" />
+  <meta property="og:description" content="Self-hosted team brain. One Telegram agent per teammate, sharing what they learn through a single Postgres knowledge base." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://cogent42.github.io/cogent42-team/" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4aa'/%3E%3Ctext x='16' y='22' font-family='ui-monospace,monospace' font-size='18' font-weight='700' text-anchor='middle' fill='%23000'%3E42%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #0b0f12;
+      --bg-elev: #11171c;
+      --bg-card: #141b21;
+      --border: #1f2932;
+      --fg: #e6edf3;
+      --fg-muted: #8b9aa7;
+      --accent: #00d4aa;
+      --accent-soft: #00d4aa1a;
+      --warn: #f5a623;
+      --mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code, pre, .mono { font-family: var(--mono); }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ---------- nav ---------- */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(11, 15, 18, 0.85);
+      backdrop-filter: saturate(140%) blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+    .brand {
+      font-family: var(--mono);
+      font-weight: 700;
+      color: var(--fg);
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+    .brand .dot { color: var(--accent); }
+    nav .links { display: flex; gap: 22px; font-size: 14px; }
+    nav .links a { color: var(--fg-muted); }
+    nav .links a:hover { color: var(--fg); text-decoration: none; }
+
+    /* ---------- hero ---------- */
+    header.hero {
+      padding: 88px 0 72px;
+      border-bottom: 1px solid var(--border);
+      background:
+        radial-gradient(ellipse 800px 400px at 50% -10%, var(--accent-soft), transparent 60%),
+        var(--bg);
+    }
+    .eyebrow {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: clamp(36px, 5.5vw, 56px);
+      line-height: 1.05;
+      letter-spacing: -0.025em;
+      margin: 0 0 20px;
+      font-weight: 700;
+    }
+    h1 .accent { color: var(--accent); }
+    .lede {
+      font-size: clamp(17px, 2vw, 20px);
+      color: var(--fg-muted);
+      max-width: 720px;
+      margin: 0 0 36px;
+    }
+
+    .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: #001714; }
+    .btn-primary:hover { background: #00f0c1; text-decoration: none; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--fg);
+      border-color: var(--border);
+    }
+    .btn-ghost:hover { background: var(--bg-elev); border-color: #2a3640; text-decoration: none; }
+
+    /* ---------- sections ---------- */
+    section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+    section:last-of-type { border-bottom: none; }
+    h2 {
+      font-size: 28px;
+      letter-spacing: -0.02em;
+      margin: 0 0 12px;
+      font-weight: 700;
+    }
+    h2 .num {
+      font-family: var(--mono);
+      color: var(--accent);
+      font-size: 14px;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    section > .container > p.intro {
+      color: var(--fg-muted);
+      max-width: 720px;
+      margin: 0 0 36px;
+    }
+
+    /* ---------- feature grid ---------- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 22px 22px 20px;
+    }
+    .card h3 {
+      font-size: 16px;
+      margin: 0 0 8px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .card p {
+      margin: 0;
+      color: var(--fg-muted);
+      font-size: 14.5px;
+    }
+    .card .tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 2px 7px;
+      border-radius: 3px;
+      margin-bottom: 10px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ---------- flow ---------- */
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 8px;
+    }
+    @media (max-width: 720px) {
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { display: none; }
+    }
+    .flow .step {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .flow .step .label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--fg-muted);
+      letter-spacing: 0.06em;
+    }
+    .flow .step .name {
+      font-weight: 600;
+      color: var(--fg);
+      font-size: 15px;
+    }
+    .flow .step .detail {
+      font-size: 13.5px;
+      color: var(--fg-muted);
+    }
+    .flow .arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--fg-muted);
+      font-family: var(--mono);
+      font-size: 18px;
+    }
+
+    /* ---------- code block ---------- */
+    pre.code {
+      background: #0a0e11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      font-size: 13.5px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    pre.code .c { color: #5d6d7a; }
+    pre.code .k { color: var(--accent); }
+    pre.code .s { color: #f5a623; }
+
+    /* ---------- footer ---------- */
+    footer {
+      padding: 36px 0 56px;
+      color: var(--fg-muted);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+    }
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    footer a { color: var(--fg-muted); }
+    footer a:hover { color: var(--fg); }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="container">
+      <span class="brand">cogent42<span class="dot">-</span>team</span>
+      <div class="links">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#start">Get started</a>
+        <a href="https://github.com/cogent42/cogent42-team">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <span class="eyebrow">Self-hosted · Multi-user · Built on Claude Agent SDK</span>
+      <h1>A team brain that <span class="accent">remembers</span> across every teammate.</h1>
+      <p class="lede">
+        cogent42-team gives every teammate their own Telegram agent. Each agent talks to your team's
+        Postgres knowledge base — projects, decisions, server facts, workflows — with per-fact ACLs,
+        so you share what matters and keep the rest private. Gmail goes in automatically. You host the
+        whole thing.
+      </p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="https://github.com/cogent42/cogent42-team#-quick-start">Get started</a>
+        <a class="btn btn-ghost" href="https://github.com/cogent42/cogent42-team">View source</a>
+      </div>
+    </div>
+  </header>
+
+  <section id="how">
+    <div class="container">
+      <h2><span class="num">01</span>How it works</h2>
+      <p class="intro">
+        Each teammate has their own bot container, provisioned by a control-plane on first onboarding.
+        Bots write to and read from a single Postgres database. Gmail messages flow through the same
+        extraction pipeline as chat.
+      </p>
+      <div class="flow">
+        <div class="step">
+          <span class="label">INPUT</span>
+          <span class="name">Telegram + Gmail</span>
+          <span class="detail">DM your bot. Sent emails ingest automatically.</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <span class="label">EXTRACT</span>
+          <span class="name">Async worker</span>
+          <span class="detail">Sonnet 4.6 distills facts; categorizes by ACL.</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <span class="label">RECALL</span>
+          <span class="name">Postgres + pgvector</span>
+          <span class="detail">Hybrid BM25 + cosine retrieval, injected into every prompt.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="container">
+      <h2><span class="num">02</span>What you get</h2>
+      <p class="intro">
+        The pieces a team install needs that a single-user assistant doesn't.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <span class="tag">PER-FACT ACL</span>
+          <h3>Share what matters, keep the rest private</h3>
+          <p>Every fact is tagged <code>private</code>, <code>team</code>, or <code>org</code>. Personal preferences, rules, and sensitive content stay with the owner; project knowledge fans out.</p>
+        </div>
+        <div class="card">
+          <span class="tag">GMAIL-AWARE</span>
+          <h3>Sent mail flows in by default</h3>
+          <p>OAuth-connected per user. Sent-only by default so you don't ingest cold inbound noise. PDFs, docx, xlsx, images get parsed too.</p>
+        </div>
+        <div class="card">
+          <span class="tag">HYBRID RETRIEVAL</span>
+          <h3>BM25 + pgvector cosine</h3>
+          <p>Top-30 most relevant facts injected into the system prompt every turn. Own-knowledge bonus + permanence + evidence count rank ties.</p>
+        </div>
+        <div class="card">
+          <span class="tag">SELF-HOSTED</span>
+          <h3>One docker-compose, one host</h3>
+          <p>Postgres + control-plane + extractor + gmail worker + per-user bot containers. No third-party SaaS to trust with your team's knowledge.</p>
+        </div>
+        <div class="card">
+          <span class="tag">AUDIT</span>
+          <h3>Every read and write logged</h3>
+          <p>Cross-user fact reads, ACL flips, deletes — all in <code>audit_log</code> with actor, target, and reason. Replay anything.</p>
+        </div>
+        <div class="card">
+          <span class="tag">CLAUDE AGENT SDK</span>
+          <h3>Real tool use, not just chat</h3>
+          <p>Each bot is the Claude Code preset with the team knowledge base as its memory. Reads files, runs commands, edits code — scoped per user.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="container">
+      <h2><span class="num">03</span>Get started</h2>
+      <p class="intro">
+        You'll need a host with Docker, a Postgres, an OpenAI key (embeddings), and a Telegram bot
+        token per teammate. The setup script walks you through the rest.
+      </p>
+      <pre class="code"><span class="c"># clone</span>
+git <span class="k">clone</span> https://github.com/cogent42/cogent42-team.git
+<span class="k">cd</span> cogent42-team
+
+<span class="c"># interactive setup — generates .env, creates the first user</span>
+npm <span class="k">run</span> setup
+
+<span class="c"># bring everything up</span>
+docker compose up -d --build
+
+<span class="c"># onboard a teammate (control-plane API)</span>
+curl -X POST -H <span class="s">"Authorization: Bearer $ADMIN_TOKEN"</span> \
+  http://127.0.0.1:8080/api/users \
+  -d <span class="s">'{"email":"alice@org","telegram_bot_token":"…"}'</span></pre>
+      <p style="margin-top: 24px; color: var(--fg-muted); font-size: 14px;">
+        Full setup, architecture, and operations notes live in the
+        <a href="https://github.com/cogent42/cogent42-team#readme">README</a>.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <span>cogent42-team — MIT licensed, self-hosted.</span>
+      <span>
+        <a href="https://github.com/cogent42/cogent42-team">github.com/cogent42/cogent42-team</a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/cogent42/cogent42">cogent42 (single-user)</a>
+      </span>
+    </div>
+  </footer>
+
+</body>
+</html>
