@@ -285,7 +285,7 @@ WHERE deleted_at IS NULL AND superseded_by IS NULL
 ORDER BY (
   ts_rank(fact_tsv, plainto_tsquery('simple', :prompt))
   + (1 - (embedding <=> :q_embedding))
-  + CASE WHEN owner_user_id = :me THEN 0.2 ELSE 0 END     -- own-knowledge boost
+  + CASE WHEN owner_user_id = :me THEN 0.05 ELSE 0 END    -- own-knowledge boost (small enough that richer team facts can still win on relevance)
   + CASE WHEN importance = 'permanent' THEN 0.1 ELSE 0 END
 ) DESC
 LIMIT 30;
