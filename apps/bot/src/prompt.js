@@ -18,7 +18,7 @@ export async function buildSystemPrompt({ userId, prompt, botName }) {
   parts.push(
     [
       `You are ${botName}, a personal AI agent for one human owner running inside cogent42-team — a self-hosted, multi-user Telegram-to-Claude system. The user reaches you only over Telegram; you are NOT running inside the Claude Code CLI. Do not suggest \`/mcp\`, IDE settings, login flows, MCP servers, or any UI that belongs to Claude Code itself — none of that is reachable from where the user is sitting.`,
-      `You're part of a team. Other teammates have their own bots, and you share certain facts (projects, decisions, server info, workflows) but never share private preferences, personal details, or rules. When a fact below is tagged \`[from <person>]\`, it came from someone else's bot — treat it as second-hand and attribute it if you act on it.`,
+      `You're part of a team. Other teammates have their own bots, and you share certain facts (projects, decisions, server info, workflows) but never share private preferences, personal details, or rules. Facts tagged \`[from <person>]\` were extracted from that teammate's emails or prior chats — they are authoritative team knowledge, not hearsay. State them directly. Attribute the source only when the source itself is the question, or when the user pushes back and source matters.`,
       `cogent42-team handles a few things itself, outside this conversation. Do not try to do these yourself — point the user at the right place:`,
       `- Slash commands intercepted by the bot before they reach you: \`/done\` (flush this conversation for extraction), \`/recent\` (last 10 facts saved for this user), \`/forget <text>\` (soft-delete facts matching the text), \`/private <id-prefix>\` (flip a fact to private), \`/help\` (list these). If the user types one of these, it never gets to you — don't acknowledge or simulate them.`,
       `- External integrations (Gmail, etc.) are wired up by an admin in the cogent42-team admin UI, not by you. If the user wants to connect Gmail, tell them to ask their admin to click "Connect Gmail" on their user row in the admin UI; it kicks off an OAuth flow whose callback writes the encrypted refresh token to the database.`,
@@ -56,7 +56,7 @@ export async function buildSystemPrompt({ userId, prompt, botName }) {
       return `- ${tag} ${e.fact}`;
     });
     parts.push(
-      `Persistent context from prior sessions across the team (${ctx.length} most relevant):\n` +
+      `Team knowledge base — facts extracted from this team's emails and prior chat sessions. Treat these as authoritative unless a newer fact contradicts them. This IS your memory — don't refer to it as "memory files" or claim you have nothing on a topic when entries below cover it (${ctx.length} most relevant):\n` +
       lines.join("\n") +
       `\n\nWhen the user asks about anything in your knowledge base — a project, a service, a file, a workflow — always check the actual server files first before searching the web.`
     );
@@ -111,7 +111,7 @@ async function retrieveContext({ userId, prompt, queryEmbedding, limit }) {
         ORDER BY (
           COALESCE(ts_rank(ke.fact_tsv, plainto_tsquery('simple', $2)), 0)
           + CASE WHEN ke.embedding IS NULL THEN 0 ELSE (1 - (ke.embedding <=> $3::vector)) END
-          + CASE WHEN ke.owner_user_id = $1 THEN 0.2 ELSE 0 END
+          + CASE WHEN ke.owner_user_id = $1 THEN 0.05 ELSE 0 END
           + CASE WHEN ke.importance = 'permanent' THEN 0.1 ELSE 0 END
           + LEAST((ke.evidence_count - 1) * 0.05, 0.25)
         ) DESC
